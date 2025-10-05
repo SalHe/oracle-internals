@@ -21,6 +21,14 @@ LittleEndian();
 
 typedef time_t OracleTimeStamp <comment=oracleTimestamp>;
 
+uint64 paddingSize(uint64 padding, uint64 actualSize) {
+    local uint64 remainder = actualSize % padding;
+    if (remainder == 0) {
+        return actualSize;
+    }
+    return actualSize + padding - remainder;
+}
+
 string oracleTimestamp(OracleTimeStamp& t) {
     return TimeTToString((int32)t + 545961600);
 }
@@ -41,19 +49,139 @@ struct FileMetaBlockHeader {
 };
 
 struct RedoBlockHead {
-    int32 magicNumber;
-    int32 id;
-    int32 sequence;
-    int16 offset: 15;
-    int16 _u1:1  <hidden=UNKNOWN_HIDDEN>;
-    int16 checkSum;
+    uint32 magicNumber;
+    uint32 id;
+    uint32 sequence;
+    uint16 offset: 15;
+    uint16 _u1:1  <hidden=UNKNOWN_HIDDEN>;
+    uint16 checkSum;
     
     Assert(magicNumber == 0x00002201, "redo block magic number is not expected");
 };
 
-struct RedoBlockCompact(int32 blockSize) {
-    RedoBlockHead block;
-    uint8 _u1[blockSize - sizeof(block)] <hidden=UNKNOWN_HIDDEN>;
+// https://jonathanlewis.wordpress.com/2017/07/25/redo-op-codes/
+enum <uint8> RedoOpLayer {
+    TX_CTL = 1,
+    TX_READ = 2,
+    TX_UPDATE = 3,
+    BLK_CLEANOUT = 4,
+    TX_UNDO_MANAGEMENT = 5,
+    CTL_FILE = 6,
+    INDEX = 10,
+    TABLE = 11,
+    CLUSTER = 12,
+    SEG_MANAGEMENT = 13,
+    EXTENT_MANAGEMENT = 14,
+    TABLESPACE = 15,
+    ROW_CACHE = 16,
+    RECOVERY_MANAGEMENT = 17,
+    BLOCK_IMAGE = 18,
+    DIRECT_LOADER = 19,
+    COMPATIBILITY = 20,
+    LOB_SEG = 21,
+    LOCALLY_MANABGMENT_TBS = 22,
+    BLOCK_WRITES = 23,
+    DDL_STATEMENTS = 24,
+    QUEUES = 25,
+    LOB = 26,
+    BLOCK_CHANGE = 27,
+};
+
+struct RedoOp {
+    RedoOpLayer layer;
+    uint8 op;    
+};
+
+struct DataBlockAddr {
+    uint32 blk: 22;
+    uint32 file: 10;
+};
+
+
+typedef struct {
+    RedoOp operation;
+    uint16 blockClass <comment="CLS(Block Class)">;
+    uint16 fileNumber <comment="AFN(Absolute File Number)">;
+    uint16 objHigh;
+    DataBlockAddr dba  <comment="DBA(Data Block Address">;
+    Scn    scn;
+    uint8  seq  <comment="SEQ(Sequence number relative to SCN)">;
+    uint8  type <comment="TYP（Change type)">;
+    uint16 objLow;
+} ChangeHeader <comment=showChangeObj>;
+
+struct ChangeVertorData(uint16 size) {
+    uint8 bytes[size];
+};
+
+typedef struct {
+    ChangeHeader head;
+    uint32 _u1[2]; // TODO 这里与提供的资料有些出入，在21.3.0中，我导出的文件中是 changeListLen=1，实际changeList往后推了，可能是版本升级带来的
+    uint16 changeListLen;
+    
+    if (changeListLen >= 2) {
+        local uint16 vectorCount = changeListLen/2 - 1;
+        uint16 changeVector[vectorCount];
+        
+        if ((changeListLen) % 4 != 0) {
+            uint8  padding[4 - (changeListLen)%4];
+        }
+        
+        for (int i=0; i<vectorCount; i++) {
+            ChangeVertorData data(paddingSize(4, changeVector[i]));
+        }
+    }
+    
+} Change;
+
+string showChangeObj(ChangeHeader& c) {
+    return Str("obj: %u", ((uint32)c.objHigh << 16) | (uint32)c.objLow);
+}
+
+struct _RedoBlock(int32 blockSize) {
+    local uint64 blockBegin = FTell();
+    
+    RedoBlockHead head;
+    
+    
+    local uint16 crossBlockRedoCotent = head.offset - sizeof(head);
+    if (crossBlockRedoCotent > 0) {
+        while (FTell() < blockBegin + head.offset) {
+            Change change <optimize=false>;
+        }
+    } else {
+        uint32 len <comment="LEN">;
+        union {
+            uint8 value;
+            struct {
+                uint8 KCRVALID: 1;
+                uint8 KCRDEPND: 1;
+                uint8 KCRVOID:  1;
+                uint8 KCRNMARK: 1;
+                uint8 KCRORDER: 1;
+            uint8 UNKNOWN:  3 <hidden=UNKNOWN_HIDDEN>;
+            } flags;
+        } vld <comment="VLD">;
+        uint8 _u1;
+        uint16 subScn;
+        Scn scn;
+        
+        if (vld.flags.KCRVOID) {
+            uint8 _u[48];
+            OracleTimeStamp beginTime;
+        } else {
+            Assert(0, "NOT IMPLMENTED");   
+        }
+        
+        while (FTell() % blockSize != 0) {
+            Change change <optimize=false>;
+        }
+    }
+};
+
+struct RedoBlock(int32 blockSize) {
+    _RedoBlock content(blockSize);
+    uint8 _u1[blockSize - sizeof(content)] <hidden=UNKNOWN_HIDDEN>; // size may be 0
 };
 
 
@@ -62,21 +190,21 @@ struct _RedoFileHeader {
     RedoBlockHead head;
     Assert(head.id == 1, "redo file header should be in block#1");
     
-    int32 _u3 <hidden=UNKNOWN_HIDDEN>;
-    int32 vsn <comment="Compatibility Vsn">;
-    int32 dbId <comment="Db ID">;
+    uint32 _u3 <hidden=UNKNOWN_HIDDEN>;
+    uint32 vsn <comment="Compatibility Vsn">;
+    uint32 dbId <comment="Db ID">;
     char  dbName[8] <comment="Db Name">; // 看起来最多8字节：因为测试里给的名字被截断了
-    int32 controlSeq <comment="Control Seq">; // TODO：也有可能是short类型
-    int32 _u4[2] <hidden=UNKNOWN_HIDDEN>;
-    int16 fileNumber; // https://juejin.cn/post/6915191698217926664
-    int16 fileType; // https://juejin.cn/post/6915191698217926664
-    int32 activationId <comment="Activation ID">;
+    uint32 controlSeq <comment="Control Seq">; // TODO：也有可能是short类型
+    uint32 _u4[2] <hidden=UNKNOWN_HIDDEN>;
+    uint16 fileNumber; // https://juejin.cn/post/6915191698217926664
+    uint16 fileType; // https://juejin.cn/post/6915191698217926664
+    uint32 activationId <comment="Activation ID">;
     uint8 _z1[36] <hidden=UNKNOWN_HIDDEN>;
     char  description[64];
     
-    int32 nab <comment="nab">;
+    uint32 nab <comment="nab">;
     
-    int32 resetLogsCount <comment="resetlogs count">;
+    uint32 resetLogsCount <comment="resetlogs count">;
     Scn   resetLogsScn <comment="scn (resetlogs count)">;
     uint8 hws <comment="hws">;
     
@@ -88,7 +216,7 @@ struct _RedoFileHeader {
     Scn nextScn <comment="Next scn">;
     OracleTimeStamp nextScnTimestamp;
     
-    int32 _u6 <hidden=UNKNOWN_HIDDEN>;
+    uint32 _u6 <hidden=UNKNOWN_HIDDEN>;
     
     Scn enabledScn <comment="Enabled scn">;
     OracleTimeStamp enabledScnTimestamp;
@@ -119,11 +247,24 @@ struct RedoFileHeader(int32 blockSize) {
     uint8 _u1[blockSize - sizeof(content)] <hidden=UNKNOWN_HIDDEN>;
 };
 
+// Block#0
+struct FileHeader {
+    FileMetaBlockHeader content;
+    uint8 _z1[content.blockSize - sizeof(content)] <hidden=UNKNOWN_HIDDEN>;
+};
+
+string showBlockId(RedoBlock& block) {
+    return Str("Block#%u", block.content.head.id);
+}
+
 struct FILE {
-    FileMetaBlockHeader header;
-    uint8 _z1[header.blockSize - sizeof(header)] <hidden=UNKNOWN_HIDDEN>;
+    FileHeader     header <comment="Block#0">;
+    RedoFileHeader redoHeader(header.content.blockSize) <comment="Block#1">;
     
-    RedoFileHeader   redoHeader(header.blockSize);
-    RedoBlockCompact blocks(header.blockSize)[header.blockCount-1] <optimize=false>;
+    for (int i=0; i<header.content.blockCount-1; i++) {
+        RedoBlock  redoBlock(header.content.blockSize) <comment=showBlockId, optimize=false>;    
+    }
+    
+    Assert(FEof(), "Some remaining blocks?");
 } file;
 
