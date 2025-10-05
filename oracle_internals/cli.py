@@ -3,6 +3,7 @@ import docker
 import argparse
 import pytest
 import yaml
+import subprocess
 
 import oracle_internals.cases
 from oracle_internals.config import CONFIG
@@ -49,6 +50,12 @@ def _collect(args):
 
     py_args = args.pytest_args[1:]
     py_args.extend(['--pyargs', oracle_internals.cases.__name__])
+    py_args.extend(
+        [
+            '--alluredir',
+            CONFIG['outputs'].get('allure', './allure-results')
+        ]
+    )
 
     if container.status != 'running':
         container.start()
@@ -61,6 +68,18 @@ def _collect(args):
         pytest.main(py_args)
     finally:
         container.stop()
+
+
+def _report(args):
+    host = args.host
+    port = args.port
+    allure_dir = CONFIG['outputs'].get('allure', './allure-results')
+    print(f"启动 Allure 报告服务: http://{host}:{port}")
+    subprocess.run([
+        'allure', 'serve', allure_dir,
+        '--host', host,
+        '--port', str(port)
+    ])
 
 
 def main():
@@ -84,6 +103,13 @@ def main():
     parser_collect.set_defaults(func=_collect)
     parser_collect.add_argument(
         'pytest_args', nargs=argparse.REMAINDER, help='传递给 pytest 的参数')
+
+    parser_report = subparsers.add_parser('report', help='启动 Allure 报告服务')
+    parser_report.set_defaults(func=_report)
+    parser_report.add_argument(
+        '--host', default='127.0.0.1', help='监听地址，默认所有地址')
+    parser_report.add_argument(
+        '--port', type=int, default=2992, help='监听端口')
 
     args = parser.parse_args()
 

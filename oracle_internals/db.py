@@ -26,7 +26,7 @@ def db_connection():
 
 def get_file_content(container_path: str) -> bytes:
     container = get_container()
-    stream, _ = container.get_archive(container_path) # type: ignore
+    stream, _ = container.get_archive(container_path)  # type: ignore
     fileobj = io.BytesIO()
     for chunk in stream:
         fileobj.write(chunk)
@@ -36,3 +36,18 @@ def get_file_content(container_path: str) -> bytes:
         stream = tar.extractfile(member)
         assert stream is not None
         return stream.read()  # type: ignore
+
+
+def download_file_from_container(container_path: str, local_path: str):
+    container = get_container()
+    stream, _ = container.get_archive(container_path) # type: ignore
+    fileobj = io.BytesIO()
+    for chunk in stream:
+        fileobj.write(chunk)
+    fileobj.seek(0)
+    with tarfile.open(fileobj=fileobj) as tar:
+        member = tar.getmember(container_path.split('/')[-1])
+        with open(local_path, 'wb') as f:
+            stream = tar.extractfile(member)
+            assert stream is not None
+            f.write(stream.read())

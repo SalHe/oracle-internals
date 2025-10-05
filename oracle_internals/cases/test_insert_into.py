@@ -1,7 +1,11 @@
 from oracle_internals.cases.test_base import CaseBase
 
 
-class TestInsertInto(CaseBase):
+class TestSimpleInsertInto(CaseBase):
+    """
+    开启事务，插入一条数据后，立马提交。
+    """
+    
     def _prepare(self, get_connection):
         with get_connection() as connection:
             with connection.cursor() as cursor:

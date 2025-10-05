@@ -3,3 +3,5 @@ container:
   image: oracle/database:21.3.0-ee
   ready-tag: DATABASE IS READY TO USE!
   db-password: '123456'
+outputs:
+  allure: ./allure-results

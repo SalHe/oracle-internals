@@ -1,8 +1,11 @@
+import tempfile
 from typing import Callable
 
+import os
 import oracledb
+import allure
 
-from oracle_internals.db import get_container, get_file_content
+from oracle_internals.db import download_file_from_container, get_container, get_file_content
 
 
 class CaseBase:
@@ -52,8 +55,14 @@ class CaseBase:
                     f"ALTER SYSTEM DUMP LOGFILE '{redo_file}'")
 
         # 输出结果
-        print("==============================================================")
-        print(get_file_content(diag_file).decode())
+        with tempfile.NamedTemporaryFile() as f:
+            download_file_from_container(diag_file, f.name)
+            allure.attach.file(f.name, name=os.path.basename(diag_file),
+                               attachment_type=allure.attachment_type.TEXT)
+
+        with tempfile.NamedTemporaryFile() as f:
+            download_file_from_container(redo_file, f.name)
+            allure.attach.file(f.name, name=os.path.basename(redo_file))
 
     def test_run(self, get_connection: Callable[[], oracledb.Connection]):
         self._prepare(get_connection)
