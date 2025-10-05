@@ -1,0 +1,5 @@
+container:
+  name: oracle-internal-db
+  image: oracle/database:21.3.0-ee
+  ready-tag: DATABASE IS READY TO USE!
+  db-password: '123456'

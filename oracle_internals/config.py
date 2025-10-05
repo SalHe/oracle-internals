@@ -1,0 +1,1 @@
+CONFIG: dict = {}  # type: ignore
