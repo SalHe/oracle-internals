@@ -1,0 +1,33 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "collect",
+            "type": "shell",
+            "command": "uv run main.py collect",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "report",
+            "type": "shell",
+            "command": "uv run main.py report",
+            "group": "none",
+            "problemMatcher": []
+        },
+        {
+            "label": "collect and report",
+            "type": "shell",
+            "group": "none",
+            "dependsOn": [
+                "collect",
+                "report"
+            ],
+            "dependsOrder": "sequence",
+            "problemMatcher": []
+        }
+    ]
+}

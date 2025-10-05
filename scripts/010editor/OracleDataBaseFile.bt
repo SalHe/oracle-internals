@@ -1,0 +1,129 @@
+//------------------------------------------------
+//--- 010 Editor v16.0.2 Binary Template
+//
+//      File: Oracle Redo
+//   Authors: SalHe <salhe@qq.com>
+//   Version: 0.1
+//   Purpose: Parsing redo file from Oracle Database.
+//  Category: 
+// File Mask: 
+//  ID Bytes: 
+//   History: 
+//------------------------------------------------
+
+
+// fields named '_uxxxx' means unknown usage.
+// fields named '_zxxxx' means zeros(maybe).
+
+local uint8 UNKNOWN_HIDDEN=false;
+
+LittleEndian();
+
+typedef time_t OracleTimeStamp <comment=oracleTimestamp>;
+
+string oracleTimestamp(OracleTimeStamp& t) {
+    return TimeTToString((int32)t + 545961600);
+}
+
+struct Scn {
+    uint32 base;
+    uint16 wrapper;
+    uint16 _u1 <hidden=UNKNOWN_HIDDEN>;
+};
+
+struct FileMetaBlockHeader {
+    uint8 _u1[20] <hidden=UNKNOWN_HIDDEN>;
+    int32  blockSize;
+    int32  blockCount;
+    int32  magicNumber;
+    int32  _u2 <hidden=UNKNOWN_HIDDEN>;
+    Assert(magicNumber == 0x7A7B7C7D, "Magic number is not expected.");
+};
+
+struct RedoBlockHead {
+    int32 magicNumber;
+    int32 id;
+    int32 sequence;
+    int16 offset: 15;
+    int16 _u1:1  <hidden=UNKNOWN_HIDDEN>;
+    int16 checkSum;
+    
+    Assert(magicNumber == 0x00002201, "redo block magic number is not expected");
+};
+
+struct RedoBlockCompact(int32 blockSize) {
+    RedoBlockHead block;
+    uint8 _u1[blockSize - sizeof(block)] <hidden=UNKNOWN_HIDDEN>;
+};
+
+
+/// Block#1
+struct _RedoFileHeader {
+    RedoBlockHead head;
+    Assert(head.id == 1, "redo file header should be in block#1");
+    
+    int32 _u3 <hidden=UNKNOWN_HIDDEN>;
+    int32 vsn <comment="Compatibility Vsn">;
+    int32 dbId <comment="Db ID">;
+    char  dbName[8] <comment="Db Name">; // 看起来最多8字节：因为测试里给的名字被截断了
+    int32 controlSeq <comment="Control Seq">; // TODO：也有可能是short类型
+    int32 _u4[2] <hidden=UNKNOWN_HIDDEN>;
+    int16 fileNumber; // https://juejin.cn/post/6915191698217926664
+    int16 fileType; // https://juejin.cn/post/6915191698217926664
+    int32 activationId <comment="Activation ID">;
+    uint8 _z1[36] <hidden=UNKNOWN_HIDDEN>;
+    char  description[64];
+    
+    int32 nab <comment="nab">;
+    
+    int32 resetLogsCount <comment="resetlogs count">;
+    Scn   resetLogsScn <comment="scn (resetlogs count)">;
+    uint8 hws <comment="hws">;
+    
+    uint8 _u5[7] <hidden=UNKNOWN_HIDDEN>;
+    
+    Scn lowScn <comment="Low  scn">;
+    OracleTimeStamp lowScnTimestamp;
+    
+    Scn nextScn <comment="Next scn">;
+    OracleTimeStamp nextScnTimestamp;
+    
+    int32 _u6 <hidden=UNKNOWN_HIDDEN>;
+    
+    Scn enabledScn <comment="Enabled scn">;
+    OracleTimeStamp enabledScnTimestamp;
+    
+    Scn threadClosedScn <comment="Thread closed scn">;
+    OracleTimeStamp threadClosedTimestamp;
+    
+    uint8 _u7[4] <hidden=UNKNOWN_HIDDEN>;
+    
+    uint32 miscFlags <comment="Miscellaneous flags">;
+    uint32 miscFlags2 <comment="Miscellaneous second flags">;
+    
+    uint8 _u1[28] <hidden=UNKNOWN_HIDDEN>;
+    Scn realNextScn <comment="Real next scn">;
+    
+    uint8 _u8[4] <hidden=UNKNOWN_HIDDEN>;
+    
+    Scn prevResetLogsScn <comment="scn (prev resetlogs count)">;
+    uint32 prevResetLogsCount <comment="prev resetlogs count">;
+    
+    uint8 _z2[152] <hidden=UNKNOWN_HIDDEN>;
+
+    uint8 logKey[16];
+};
+
+struct RedoFileHeader(int32 blockSize) {
+    _RedoFileHeader content;
+    uint8 _u1[blockSize - sizeof(content)] <hidden=UNKNOWN_HIDDEN>;
+};
+
+struct FILE {
+    FileMetaBlockHeader header;
+    uint8 _z1[header.blockSize - sizeof(header)] <hidden=UNKNOWN_HIDDEN>;
+    
+    RedoFileHeader   redoHeader(header.blockSize);
+    RedoBlockCompact blocks(header.blockSize)[header.blockCount-1] <optimize=false>;
+} file;
+
