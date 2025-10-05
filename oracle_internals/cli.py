@@ -1,12 +1,12 @@
 from datetime import datetime
 import docker
 import argparse
+import pytest
 import yaml
 
-from oracle_internals.cases.all import get_all_cases
+import oracle_internals.cases
 from oracle_internals.config import CONFIG
-from oracle_internals.db import db_connection, get_container, get_file_content
-from docker.models.containers import Container
+from oracle_internals.db import get_container
 
 
 def _remove_container(args):
@@ -42,59 +42,13 @@ def _init_container(args):
     container.stop()
 
 
-def _run_all_case(container: Container):
-    redo_file = None
-    for c in get_all_cases():
-        try:
-            # 执行用例
-            with db_connection() as connection:
-                with connection.cursor() as cursor:
-                    # Prepare environment
-                    c.prepare(db_connection)
-                    cursor.execute('ALTER SYSTEM SWITCH LOGFILE')
-
-                    # recorded operations
-                    c.run(db_connection)
-
-                    # Clean up
-                    cursor.execute('ALTER SYSTEM SWITCH LOGFILE')
-                    c.cleanup(db_connection)
-
-                    cursor.execute("SELECT * FROM v$archived_log")
-                    last_one = None
-                    for row in cursor:
-                        last_one = row
-
-                    assert last_one is not None
-                    print('Last archived log:', last_one)
-                    redo_file = last_one[2]
-
-            # 收集诊断信息
-            with db_connection() as connection:
-                with connection.cursor() as cursor:
-                    sql = "select value from v$diag_info where name='Default Trace File'"
-                    cursor.execute(sql)
-
-                    diag_file = cursor.fetchone()
-                    assert diag_file is not None
-                    diag_file = diag_file[0]
-                    container.exec_run(f'rm -f {diag_file}')
-
-                    cursor.execute(
-                        f"ALTER SYSTEM DUMP LOGFILE '{redo_file}'")
-
-            # 输出结果
-            print("==============================================================")
-            print(get_file_content(diag_file).decode())
-        except Exception as e:
-            print(f'用例 {c} 执行失败: {e}')
-            raise
-
-
 def _collect(args):
     container = get_container()
     if container is None:
         raise RuntimeError('容器未初始化，请先运行 init 命令')
+
+    py_args = args.pytest_args[1:]
+    py_args.extend(['--pyargs', oracle_internals.cases.__name__])
 
     if container.status != 'running':
         container.start()
@@ -104,7 +58,7 @@ def _collect(args):
                 break
 
     try:
-        _run_all_case(container)
+        pytest.main(py_args)
     finally:
         container.stop()
 
@@ -128,6 +82,8 @@ def main():
 
     parser_collect = subparsers.add_parser('collect', help='收集数据')
     parser_collect.set_defaults(func=_collect)
+    parser_collect.add_argument(
+        'pytest_args', nargs=argparse.REMAINDER, help='传递给 pytest 的参数')
 
     args = parser.parse_args()
 
