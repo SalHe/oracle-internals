@@ -12,3 +12,8 @@ wheels/
 
 # reports
 allure-results/
+
+temp/
+
+.zig-cache/
+zig-out/
