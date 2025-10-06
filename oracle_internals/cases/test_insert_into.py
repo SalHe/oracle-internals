@@ -5,7 +5,7 @@ class TestSimpleInsertInto(CaseBase):
     """
     开启事务，插入一条数据后，立马提交。
     """
-    
+
     def _prepare(self, get_connection):
         with get_connection() as connection:
             with connection.cursor() as cursor:
@@ -22,3 +22,26 @@ class TestSimpleInsertInto(CaseBase):
         with get_connection() as connection:
             with connection.cursor() as cursor:
                 cursor.execute('drop table t1')
+
+
+class TestSimpleInsertInto2(CaseBase):
+    """
+    开启事务，插入一条数据后，立马提交。
+    """
+
+    def _prepare(self, get_connection):
+        with get_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute('create table t2 (c1 number, c2 number)')
+
+    def _run(self, get_connection):
+        with get_connection() as connection:
+            with connection.cursor() as cursor:
+                connection.begin()
+                cursor.execute('insert into t2 values (1, 2)')
+                connection.commit()
+
+    def _cleanup(self, get_connection):
+        with get_connection() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute('drop table t2')

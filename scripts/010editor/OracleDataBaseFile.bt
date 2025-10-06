@@ -110,9 +110,183 @@ typedef struct {
     uint16 objLow;
 } ChangeHeader <comment=showChangeObj>;
 
-struct ChangeVertorData(uint16 size) {
-    uint8 bytes[size];
+struct Xid {
+    uint16 usn <comment="Undo segment number (USN) of transaction">;
+    uint16 httSlot <comment="Undo segment header transaction table slot">;
+    uint32 sequence <comment="Sequence number (wrap)">;
 };
+
+struct Uba {
+    DataBlockAddr undoDba <comment="DBA of undo block">;
+    uint16 sequence <comment="Sequence number">;
+    uint8  record <comment="Record number in block">;
+    uint8  _u1 <hidden=UNKNOWN_HIDDEN>;
+};
+
+enum <uint8> XType {
+    UNKNOWN,
+    XA,
+    XR,
+    CR,    
+};
+
+struct ChangeVertorData(ChangeHeader& head, int index, uint16 size) {
+    if (head.operation.layer == SEG_MANAGEMENT) {
+        if (head.operation.op == 5) {
+            // KTSFRBFMT (block format) redo
+            if (index == 0) {
+                uint32 obj <comment="Segobjd">;
+                uint16 type;
+                uint16 itls;
+                return;
+            }
+            
+            if (index == 1) {
+                Scn scn;
+                return;
+            }
+        }
+        
+        if (head.operation.op == 6) {
+            // (block link modify) (? index )  (options: lock clear, lock set)
+            uint32 opCode; // TODO 大小不太明确
+            DataBlockAddr nextDba;
+            uint32 itli; // TODO 大小不太明确
+            return;
+        }
+        
+        if (head.operation.op == 7) {
+            // KTSFRGRP (fgb/shdr modify freelist) redo: (options unlink block, move HWM)
+            if (index == 0) {
+                // 1: HWMMV (move hwm)                
+                uint32 opCode; // TODO 大小不太明确
+                uint32 nbk;
+                return;    
+            }
+            
+            if (index == 1) {
+                // 5: LUPD_LLIST (link a list)
+                uint32 opCode; // TODO 大小不太明确
+                uint32 slotCount;
+                uint32 slotNo;
+                uint32 flag;
+                Xid    xid;
+                uint32 head;
+                uint32 tail;
+                return;
+            }
+        }
+    } else if (head.operation.layer == TABLE) {
+        if (head.operation.op == 2) {
+            // 11.2    IRP insert row  piece
+            
+            if (index == 0) {
+                // KTB Redo
+                uint8 op: 4; // 1=F
+                uint8 cleanOut: 1;
+                uint8 _u3: 3;
+                
+                uint8 ver: 2;
+                uint8 compact: 1; // 0: (pre-11); 1: (post-11); 从字面意思来看，应该是区分是否为11之后的版本？TODO 需验证
+                uint8 startFrom: 1; // 0: start from 4; 1: start from 8
+                uint8 noPadding: 1; // https://github.com/bersler/OpenLogReplicator/blob/d8ac60b99b970a4d748e0b232170f2ed590b2427/src/parser/OpCode.h#L142
+                uint8 _u2: 3;
+
+                uint8 _u1[6];
+                Xid xid;
+                Uba uba;
+                return;
+            }
+            
+            if (index == 1) {
+                local int begin = FTell();
+                DataBlockAddr bdba;
+                DataBlockAddr hdba;
+                uint16 maxfr;
+                
+                // 2: IRP(Insert Row Piece)
+                // 10: Set Key Links
+                uint8 op: 5;
+                uint8 _u2: 1;
+                uint8 rowDependency: 1; // row dependencies Disabled/Enabled
+                uint8 _u4: 1;
+                
+                // 1: XA, Redo
+                // 2: XR, Rollback
+                // 3: CR
+                XType xType: 2;
+                uint8 flags: 5;
+                uint8 KDO_KDOM2: 1;
+                
+                uint8 itli;
+                uint8 ispac;
+                uint8 _u3[2];
+                
+                local int cost = FTell() - begin;
+                
+                /*
+                uint32 fwd;
+                uint16 fwdPos;
+                uint32 bkw;
+                uint16 bkwPos;
+                
+                // TODO 前两个标志位用于：Set Key Links
+                uint8  inFwd: 1;
+                uint8  inBkw: 1;
+                uint8  flags2: 6;
+                
+                uint8  lock;
+                uint8  slot;
+                uint8 _u1[9];
+                */
+                if (op == 2) {
+                    struct {
+                        // fb: --H-FL-- lb: 0x1  cc: 1
+                        union {
+                            uint8 value;
+                            struct {
+                                uint8 N: 1 <comment="The last column continues in the Next piece">;
+                                uint8 P: 1 <comment="The first column continues from the Previous piece">;
+                                uint8 L: 1 <comment="Last ctx piece">;
+                                uint8 F: 1 <comment="First ctx piece">;
+                                uint8 D: 1 <comment="Deleted row">;
+                                uint8 H: 1 <comment="Head piece of row">;
+                                uint8 C: 1 <comment="Clustered table member">;
+                                uint8 K: 1 <comment="Cluster Key">;
+                            } flags;
+                        } fb <comment="fb">;
+                        uint8 lb <comment="lb">;
+                        uint8 columnCount <comment="cc">;
+                        uint8 cki; // fb.flags.C = 1
+                        uint8 _u7[8];
+                        DataBlockAddr nridDba;
+                        uint16 nridSlot;
+                        uint8 _u8[6];
+        
+                        uint16 deltaSize;
+                        uint16 slot;
+                        uint8 tabn;
+                        uint8 nullsDelta[(int)Ceil((double)columnCount / 8)];
+                        uint8 _u5[6];
+                    } IRP;
+                    return;
+                }
+                
+                // TODO other OPs
+                uint8 unrecognized[size - cost];
+                return;
+            }
+            
+            if (index == 2) {
+                // 需要引用nulls才好识别列信息，目前好像解决不了
+                uint8 colData[size];
+                return;
+            }
+        }
+    }
+    uint8 unrecognized[size];
+};
+
 
 typedef struct {
     ChangeHeader head;
@@ -127,8 +301,15 @@ typedef struct {
             uint8  padding[4 - (changeListLen)%4];
         }
         
+        local int begin;
+        local int end;
+        local int expectedSize;
         for (int i=0; i<vectorCount; i++) {
-            ChangeVertorData data(paddingSize(4, changeVector[i]));
+            begin = FTell();
+            expectedSize = paddingSize(4, changeVector[i]);
+            ChangeVertorData data(head, i, expectedSize); // TODO 可能会跨block，感觉010 editor不好解决啊
+            end = FTell();
+            Assert(end - begin == expectedSize, "change vector data size is not expected");
         }
     }
     
