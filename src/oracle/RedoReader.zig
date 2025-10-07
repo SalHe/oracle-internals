@@ -19,8 +19,8 @@ _redoHeader: ?[]align(4) u8,
 inRecord: bool = false,
 currBlock: ?[]align(4) u8 = null,
 currRedoRecord: ?redo.RedoRecordHead = null,
-contentOffset: u32 = 0,
-offsetInBlock: u32 = 0,
+contentOffset: usize = 0,
+offsetInBlock: usize = 0,
 
 pub const ReadRedoError = error{
     NotOracleRedoFile,
@@ -69,6 +69,7 @@ pub fn deinit(self: *RedoReader) void {
 fn reloadHeader(self: *RedoReader) !void {
     try self.readFileHeader();
     try self.readRedoHeader();
+    try self.nextRedoBlock();
 }
 
 fn readBlock(self: *RedoReader) ![]align(4) u8 {
@@ -90,6 +91,7 @@ fn nextRedoBlock(self: *RedoReader) !void {
 
     self.currBlock = try self.readBlock();
     self.offsetInBlock = @sizeOf(redo.RedoBlockHead);
+    std.debug.print("block id: {any}\n", .{self.blockHead().id});
 }
 
 fn blockHead(self: *RedoReader) *redo.RedoBlockHead {
@@ -138,19 +140,73 @@ pub fn beginReadRecord(self: *RedoReader) !redo.RedoRecordHead {
 
     self.inRecord = true;
 
-    try self.nextRedoBlock();
-    const redoBlock: *RedoFileContentBlock = @ptrCast(self.currBlock.?.ptr);
-    if (redoBlock.head.offset.value != @sizeOf(redo.RedoBlockHead)) {
-        // 说明是一个跨block的redo，理论上应该通过readChange将其获取出来，
-        // 根据目前维护的接口来说，应该不会走到这里
-        unreachable;
+    if (self.fileHeader().blockSize - self.offsetInBlock < @min(@sizeOf(redo.RedoRecordHeadV1), @sizeOf(redo.RedoRecordHeadV2))) {
+        try self.nextRedoBlock();
     }
 
-    const record: *redo.RedoRecordHeadV2 = @ptrCast(&redoBlock.data);
-    self.offsetInBlock += @sizeOf(redo.RedoRecordHeadV2);
-    self.contentOffset = @sizeOf(redo.RedoRecordHeadV2);
-    self.currRedoRecord = .{ .v2 = record.* };
-    return self.currRedoRecord.?;
+    while (true) {
+        const redoBlock: *RedoFileContentBlock = @ptrCast(self.currBlock.?.ptr);
+        const record: *redo.RedoRecordHeadCommon = @ptrCast(@alignCast(&(@as([*]u8, @ptrCast(&redoBlock.data))[self.offsetInBlock - @sizeOf(redo.RedoBlockHead)])));
+
+        if (record.vld.KCRVOID == 1) {
+            const redoV2: *redo.RedoRecordHeadV2 = @ptrCast(@alignCast(record));
+            self.offsetInBlock += @sizeOf(redo.RedoRecordHeadV2);
+            self.contentOffset = @sizeOf(redo.RedoRecordHeadV2);
+            self.currRedoRecord = .{ .v2 = redoV2.* };
+
+            if (redoV2.common.len == 0) {
+                try self.nextRedoBlock();
+                continue;
+            }
+        } else {
+            const redoV1: *redo.RedoRecordHeadV1 = @ptrCast(@alignCast(record));
+            self.offsetInBlock += @sizeOf(redo.RedoRecordHeadV1);
+            self.contentOffset = @sizeOf(redo.RedoRecordHeadV1);
+            self.currRedoRecord = .{ .v1 = redoV1.* };
+
+            if (redoV1.common.len == 0) {
+                try self.nextRedoBlock();
+                continue;
+            }
+        }
+
+        return self.currRedoRecord.?;
+    }
+}
+
+fn readContent(self: *RedoReader, dest: []u8) !void {
+    const record = self.currRedoRecord orelse {
+        return ReadRedoError.NotInRecord;
+    };
+
+    var len: u32 = 0;
+    switch (record) {
+        .v1 => |v1| len = v1.common.len,
+        .v2 => |v2| len = v2.common.len,
+    }
+
+    if (self.contentOffset >= len) {
+        // TODO
+    }
+
+    if (self.offsetInBlock + dest.len >= self.fileHeader().blockSize) {
+        var rest = dest.len;
+        while (rest > 0) {
+            const canRead = @min(self.fileHeader().blockSize - self.offsetInBlock, rest);
+            @memcpy(dest[dest.len - rest .. dest.len - rest + canRead], self.currBlock.?[self.offsetInBlock .. self.offsetInBlock + canRead]);
+            rest -= canRead;
+            self.offsetInBlock += canRead;
+
+            if (self.offsetInBlock == self.fileHeader().blockSize) {
+                try self.nextRedoBlock();
+            }
+        }
+    } else {
+        @memcpy(dest, self.currBlock.?[self.offsetInBlock .. self.offsetInBlock + dest.len]);
+        self.offsetInBlock += dest.len;
+    }
+
+    self.contentOffset += dest.len;
 }
 
 pub fn readChange(self: *RedoReader, vectorDataAllocator: std.mem.Allocator) !redo.ChangeAndVector {
@@ -164,8 +220,8 @@ pub fn readChange(self: *RedoReader, vectorDataAllocator: std.mem.Allocator) !re
 
     var len: u32 = 0;
     switch (record) {
-        .v1 => return ReadRedoError.NotImplemented,
-        .v2 => |v2| len = v2.len,
+        .v1 => |v1| len = v1.common.len,
+        .v2 => |v2| len = v2.common.len,
     }
 
     if (self.contentOffset >= len) {
@@ -173,56 +229,41 @@ pub fn readChange(self: *RedoReader, vectorDataAllocator: std.mem.Allocator) !re
         return ReadChangeError.NoMoreChange;
     }
 
-    // change meta info
-    const change: *redo.Change = @ptrCast(@alignCast(self.currBlock.?[self.offsetInBlock..]));
-
-    // vector data size
-    const fixedCost = paddingSize(change.changeListLen, 4) + @offsetOf(redo.Change, "changeListLen");
-    self.contentOffset += fixedCost;
-    self.offsetInBlock += fixedCost;
-
-    var vectors = try std.ArrayList([]align(4) u8).initCapacity(vectorDataAllocator, change.vectorCount());
-    errdefer vectors.deinit(vectorDataAllocator);
-
-    const vectorSize = try self.allocator.alloc(u16, change.vectorCount());
+    // save change meta info(when cross block, ptr freed)
+    var change: redo.Change = undefined;
+    try self.readContent(@as([*]u8, @ptrCast(&change))[0..(@sizeOf(@TypeOf(change.changeListLen)) + @offsetOf(redo.Change, "changeListLen"))]);
+    var vectorSize: []u16 = undefined;
+    {
+        // save vector size
+        vectorSize = try self.allocator.alloc(u16, change.vectorCount());
+        try self.readContent(@as([*]u8, @ptrCast(&vectorSize[0]))[0..(vectorSize.len * @sizeOf(u16))]);
+    }
     defer self.allocator.free(vectorSize);
-    @memcpy(vectorSize, @as([*]u16, @ptrCast(&change.changeVector)));
 
+    if (change.vectorCount() % 2 == 0) {
+        self.contentOffset += 2;
+        self.offsetInBlock += 2;
+    }
+
+    // read vector data
+    var vectors: std.ArrayList([]align(4) u8) = undefined;
+    vectors = try std.ArrayList([]align(4) u8).initCapacity(vectorDataAllocator, change.vectorCount());
+    errdefer vectors.deinit(vectorDataAllocator);
     for (0..change.vectorCount()) |idx| {
         const currCost = paddingSize(vectorSize[idx], 4);
 
         const data: []align(4) u8 = try vectorDataAllocator.alignedAlloc(u8, .@"4", currCost);
         errdefer vectorDataAllocator.free(data);
-
-        var crossed = false;
-        if (self.offsetInBlock + currCost >= self.fileHeader().blockSize) {
-            var rest = currCost;
-            while (rest > 0) {
-                const canRead = @min(self.fileHeader().blockSize - self.offsetInBlock, rest);
-                @memcpy(data[currCost - rest .. currCost - rest + canRead], self.currBlock.?[self.offsetInBlock .. self.offsetInBlock + canRead]);
-                rest -= canRead;
-                self.offsetInBlock += canRead;
-
-                if (self.offsetInBlock == self.fileHeader().blockSize) {
-                    try self.nextRedoBlock();
-                }
-            }
-
-            crossed = true;
-        } else {
-            @memcpy(data, self.currBlock.?[self.offsetInBlock .. self.offsetInBlock + currCost]);
-            self.offsetInBlock += currCost;
-        }
+        try self.readContent(data);
 
         try vectors.append(
             vectorDataAllocator,
             data,
         );
-        self.contentOffset += currCost;
     }
 
     return .{
-        .change = change.*,
+        .change = change,
         .vectors = vectors,
     };
 }

@@ -83,7 +83,7 @@ pub const RedoFileContentBlock = extern struct {
     data: [0]u8,
 };
 
-pub const RedoRecordHeadV2 = extern struct {
+pub const RedoRecordHeadCommon = extern struct {
     len: u32,
     vld: packed struct(u8) {
         KCRVALID: u1,
@@ -96,13 +96,22 @@ pub const RedoRecordHeadV2 = extern struct {
     _unknown_1: u8,
     subScn: u16,
     scn: Scn,
+};
+
+pub const RedoRecordHeadV2 = extern struct {
+    common: RedoRecordHeadCommon,
     _unknown_2: [48]u8,
     beginTime: OracleTimestamp,
     data: [0]u8,
 };
 
+pub const RedoRecordHeadV1 = extern struct {
+    common: RedoRecordHeadCommon,
+    _unknown_2: [8]u8,
+};
+
 pub const RedoRecordHead = union(enum) {
-    v1: [0]u8,
+    v1: RedoRecordHeadV1,
     v2: RedoRecordHeadV2,
 };
 

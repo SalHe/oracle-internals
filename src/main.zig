@@ -30,7 +30,7 @@ pub fn main() !void {
     std.debug.print("File Header: {any}\n", .{reader.fileHeader()});
     std.debug.print("Redo Header: {any}\n", .{reader.redoHeader()});
 
-    var iRecord: u32 = 0;
+    var iRecord: u32 = 1;
     while (true) {
         const record = reader.beginReadRecord() catch |err| {
             if (err == oracle.RedoReader.ReadRedoError.NoMoreRedo) {
@@ -43,7 +43,7 @@ pub fn main() !void {
         std.debug.print("Record#{}: {any}\n", .{ iRecord, record });
         iRecord += 1;
 
-        var iChange: u32 = 0;
+        var iChange: u32 = 1; // start from 1
         while (true) {
             var change = reader.readChange(allocator) catch |err| {
                 if (err == oracle.RedoReader.ReadChangeError.NoMoreChange) {
@@ -56,7 +56,7 @@ pub fn main() !void {
 
             std.debug.print("Change#{}: {any}\n", .{ iChange, change });
             for (change.vectors.items, 0..) |vec, j| {
-                std.debug.print("  Vector#{}: {any}\n", .{ j, vec });
+                std.debug.print("  Vector#{}: {x}\n", .{ j, vec });
             }
             iChange += 1;
         }
