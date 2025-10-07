@@ -5,7 +5,7 @@ import os
 import oracledb
 import allure
 
-from oracle_internals.db import download_file_from_container, get_container, get_file_content
+from oracle_internals.db import download_file_from_container, must_get_container
 
 
 class CaseBase:
@@ -48,8 +48,7 @@ class CaseBase:
                 diag_file = cursor.fetchone()
                 assert diag_file is not None
                 diag_file = diag_file[0]
-                get_container().exec_run(  # type: ignore
-                    f'rm -f {diag_file}')
+                must_get_container().exec_run(f'rm -f {diag_file}')
 
                 cursor.execute(
                     f"ALTER SYSTEM DUMP LOGFILE '{redo_file}'")

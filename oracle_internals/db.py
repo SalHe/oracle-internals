@@ -20,13 +20,20 @@ def get_container() -> Container | None:
     return None
 
 
+def must_get_container() -> Container:
+    container = get_container()
+    if container is None:
+        raise RuntimeError('容器未初始化，请先运行 init 命令')
+    return container
+
+
 def db_connection():
     return oracledb.connect(user="sys", password=CONFIG['container']['db-password'], dsn="localhost:1521/ORCLINTERNAL", mode=oracledb.SYSDBA)
 
 
 def get_file_content(container_path: str) -> bytes:
-    container = get_container()
-    stream, _ = container.get_archive(container_path)  # type: ignore
+    container = must_get_container()
+    stream, _ = container.get_archive(container_path)
     fileobj = io.BytesIO()
     for chunk in stream:
         fileobj.write(chunk)
@@ -39,8 +46,8 @@ def get_file_content(container_path: str) -> bytes:
 
 
 def download_file_from_container(container_path: str, local_path: str):
-    container = get_container()
-    stream, _ = container.get_archive(container_path) # type: ignore
+    container = must_get_container()
+    stream, _ = container.get_archive(container_path)
     fileobj = io.BytesIO()
     for chunk in stream:
         fileobj.write(chunk)
