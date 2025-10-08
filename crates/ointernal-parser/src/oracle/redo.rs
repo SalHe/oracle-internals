@@ -29,13 +29,13 @@ impl RedoBlockHead {
 pub struct Scn {
     pub base: u32,
     pub wrapper: u16,
-    pub _unknown: u16,
+    pub marker: u16,
 }
 
 impl Scn {
     pub fn full_scn(self) -> u64 {
         let mut wrapper = self.wrapper as u32;
-        if self._unknown & 0xFFFE == 0xFFFE {
+        if self.marker & 0xFFFE == 0xFFFE {
             if wrapper == 0xFFFF {
                 return (self.base as u64) | 0xFFFF_FFFF_0000_0000u64;
             }
@@ -46,7 +46,7 @@ impl Scn {
         }
 
         if self.wrapper & 0x8000 != 0 {
-            wrapper = self._unknown as u32 | ((wrapper & 0x7FFF) << 16);
+            wrapper = self.marker as u32 | ((wrapper & 0x7FFF) << 16);
         }
 
         (self.base as u64) | ((wrapper as u64) << 32)
@@ -233,7 +233,6 @@ pub struct RedoRecordHeadCommon {
     pub len: u32,
     pub vld: u8,
     _unknown_1: u8,
-    // TODO bytes' order of scn?
     scn_byte4: u8,
     scn_byte5: u8,
     scn_byte0: u8,
