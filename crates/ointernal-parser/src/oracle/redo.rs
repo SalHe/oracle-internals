@@ -109,7 +109,7 @@ pub struct RedoFileHead {
     pub terminal_recovery_timestamp: OracleTimestamp,
 
     pub enabled_threads_bitmap1: [u8; 8],
-    _unknown_8: [u8; 8],
+    pub most_recent_redo_scn: Scn,
     pub largest_lwn: u32,
     pub real_next_scn: Scn,
 

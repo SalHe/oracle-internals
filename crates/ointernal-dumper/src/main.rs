@@ -93,12 +93,18 @@ fn print_header_info(fh: &FileHeaderBlock, rh: &RedoFileHead) {
     );
     println!(" Real next scn: 0x{:016x}", rh.real_next_scn.full_scn());
     println!(" Disk cksum: 0x{:04x} Calc cksum: 0x????", rh.head.checksum); // TODO calc checksum
-    println!(" Terminal recovery stop scn: 0x0000000000000000"); // ?
+    println!(
+        " Terminal recovery stop scn: 0x{:016x}",
+        rh.terminal_recovery_stop_scn.full_scn()
+    );
     println!(
         " Terminal recovery  {}",
         OracleDateTime::from(rh.terminal_recovery_timestamp)
     );
-    println!(" Most recent redo scn: 0x0000000000000000"); // ?
+    println!(
+        " Most recent redo scn: 0x{:016x}",
+        rh.most_recent_redo_scn.full_scn()
+    );
     println!(" Largest LWN: {} blocks", rh.largest_lwn);
 
     let flags = MiscFlags::from_bits(rh.misc_flags).unwrap();

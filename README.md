@@ -1,7 +1,8 @@
 # Oracle Internal LABs
 
 这个项目主要用于探索与分析Oracle Redo文件的结构，对于物理、逻辑结构的描述，
-将使用 [010 Editor](https://www.sweetscape.com/010editor/) 的模板来进行描述。
+~~将使用 [010 Editor](https://www.sweetscape.com/010editor/) 的模板来进行描述。~~
+（放弃了，有些不太好用这个实现，直接一步到位编程实现一个解析库。）
 
 ## 分析方法
 
