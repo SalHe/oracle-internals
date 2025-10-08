@@ -1,11 +1,13 @@
 use std::path::PathBuf;
 
-use chrono::DateTime;
 use clap::Parser;
+use ointernal_parser::oracle::redo::MiscFlags;
+use ointernal_parser::oracle::timestamp::DateTime as OracleDateTime;
 use ointernal_parser::oracle::{
     file::FileHeaderBlock,
     reader::{RBA, ReaderError, Record, RedoFileReader},
-    redo::{OracleTimestamp, RedoFileHead, RedoRecordHeadCommon},
+    redo::{RedoFileHead, RedoRecordHeadCommon},
+    timestamp::OracleTimestamp,
 };
 
 #[derive(Parser, Debug)]
@@ -14,8 +16,6 @@ struct ODumper {
     #[arg()]
     redo: PathBuf,
 }
-
-const DATETIME_FORMAT: &str = "%m/%d/%y %H:%M:%S";
 
 fn print_example_infos() {
     // some examples?
@@ -27,13 +27,6 @@ fn print_example_infos() {
     println!(" RBAs: 0x000000.00000000.0000 thru 0xffffffff.ffffffff.ffff");
     println!(" SCNs: scn: 0x0000000000000000 thru scn: 0xffffffffffffffff");
     println!(" Times: creation thru eternity");
-}
-
-fn format_timestamp(ts: OracleTimestamp) -> String {
-    DateTime::from_timestamp_secs(ts.real_timestamp() as _)
-        .unwrap()
-        .format(DATETIME_FORMAT)
-        .to_string()
 }
 
 fn print_header_info(fh: &FileHeaderBlock, rh: &RedoFileHead) {
@@ -49,77 +42,115 @@ fn print_header_info(fh: &FileHeaderBlock, rh: &RedoFileHead) {
         "	Activation ID={}=0x{:08x}",
         rh.activation_id, rh.activation_id,
     );
-    println!("	Control Seq={}=0x{:04x}", rh.control_seq, rh.control_seq,);
     println!(
-        "	File Number=1, Blksiz={}, File Type=2 LOG",
-        fh.header.block_size
+        "	Control Seq={}=0x{:04x}, File size={}=0x{:x}",
+        rh.control_seq, rh.control_seq, rh.file_size, rh.file_size,
+    );
+    println!(
+        "	File Number={}, Blksiz={}, File Type={} {}",
+        rh.file_number,
+        fh.header.block_size,
+        rh.file_type,
+        match rh.file_type {
+            2 => "LOG",
+            _ => "???",
+        }
     );
     println!(r#" descrip:"{}""#, String::from_utf8_lossy(&rh.description));
     println!(
-        " thread: 1 nab: {:x} seq: 0x{:08x} hws: 0x{:x} eot: 0 dis: 0", // TODO other fields?
+        " thread: 1 nab: 0x{:x} seq: 0x{:08x} hws: 0x{:x} eot: 0 dis: 0", // TODO other fields?
         rh.nab, rh.head.seq, rh.hws,
     );
     println!(
         " resetlogs count: 0x{:08x} scn: 0x{:016x}",
-        rh.reset_logs_count,
-        rh.reset_log_scn.to_u64(),
+        rh.reset_logs_count, rh.reset_log_scn.base,
     );
     println!(
-        " prev resetlogs count: 0x{:08x} scn: 0x{:16x}",
-        rh.prev_reset_logs_count,
-        rh.prev_reset_logs_scn.to_u64(),
+        " prev resetlogs count: 0x{:08x} scn: 0x{:016x}",
+        rh.prev_reset_logs_count, rh.prev_reset_logs_scn.base,
     );
     println!(
         " Low  scn: 0x{:016x} {}",
-        rh.low_scn.to_u64(),
-        format_timestamp(rh.low_scn_timestamp)
+        rh.low_scn.base,
+        OracleDateTime::from(rh.low_scn_timestamp)
     );
     println!(
         " Next scn: 0x{:016x} {}",
-        rh.next_scn.to_u64(),
-        format_timestamp(rh.next_scn_timestamp),
+        rh.next_scn.base,
+        OracleDateTime::from(rh.next_scn_timestamp),
     );
     println!(
         " Enabled scn: 0x{:016x} {}",
-        rh.enabled_scn.to_u64(),
-        format_timestamp(rh.enabled_scn_timestamp),
+        rh.enabled_scn.base,
+        OracleDateTime::from(rh.enabled_scn_timestamp),
     );
     println!(
         " Thread closed scn: 0x{:016x} {}",
-        rh.thread_closed_scn.to_u64(),
-        format_timestamp(rh.thread_closed_scn_timestamp),
+        rh.thread_closed_scn.base,
+        OracleDateTime::from(rh.thread_closed_scn_timestamp),
     );
     println!(" Real next scn: 0xffffffffffffffff"); // TODO ?source
     println!(" Disk cksum: 0x{:04x} Calc cksum: 0x????", rh.head.checksum); // TODO calc checksum
     println!(" Terminal recovery stop scn: 0x0000000000000000"); // ?
-    println!(" Terminal recovery  01/01/1988 00:00:00"); // ?
+    println!(
+        " Terminal recovery  {}",
+        OracleDateTime::from(rh.terminal_recovery_timestamp)
+    );
     println!(" Most recent redo scn: 0x0000000000000000"); // ?
-    println!(" Largest LWN: ? blocks");
-    println!(" End-of-redo stream : ??");
-    println!(" Unprotected mode???");
+    println!(" Largest LWN: {} blocks", rh.largest_lwn);
+
+    let flags = MiscFlags::from_bits(rh.misc_flags).unwrap();
+    println!(
+        " End-of-redo stream : {}",
+        if flags.contains(MiscFlags::END_OF_STREAM) {
+            "Yes"
+        } else {
+            "No"
+        }
+    );
+    println!(" {}", flags.protected_mode());
     println!(" Miscellaneous flags: 0x{:08x}", rh.misc_flags);
-    println!(" Miscellaneous second flags: 0x{:08x}", rh.misc_flags2);
-    println!(" Thread internal enable indicator: thr: ?, seq: ? scn: 0x????????????????");
-    println!(" Zero blocks: ?");
-    println!(" Format ID is ??");
+    println!(" Miscellaneous second flags: 0x{:x}", rh.misc_flags2);
+    println!(
+        " Thread internal enable indicator: thr: {}, seq: {} scn: 0x{:016x}",
+        rh.thread_internal_enable_tid,
+        rh.thread_internal_enable_seq,
+        rh.thread_internal_enable_scn.base,
+    );
+    println!(" Zero blocks: {}", rh.zero_blocks);
+    println!(" Format ID is {}", rh.format_id);
     println!(" redo log key is {}", hex::encode(rh.log_key));
-    println!(" redo log key flag is ??"); // ?
-    println!(" DAX High watermark block number: ?"); //?
-    println!(" DAX flags: 0x????"); // ?
-    println!(" DAX checksum: 0x????"); // ?
-    println!(" Enabled redo threads: ? "); // ?
+    println!(" redo log key flag is {:x}(HEX)", rh.redo_key_flag);
+    println!(
+        " DAX High watermark block number: {}",
+        rh.dax_hwm_block_number
+    );
+    println!(" DAX flags: 0x{:04x}", rh.dax_flags);
+    println!(" DAX checksum: 0x{:04x}", rh.dax_checksum);
+
+    print!(" Enabled redo threads: ");
+    for i in 0..rh.threads_count() {
+        if rh.is_thread_enabled(i) {
+            print!("{} ", i);
+        }
+    }
+    println!();
 }
 
-fn print_record_head(rba: RBA, head: &RedoRecordHeadCommon, ts: OracleTimestamp) {
+fn print_record_head(i_record: usize, rba: RBA, head: &RedoRecordHeadCommon, ts: OracleTimestamp) {
+    println!(
+        "REDO RECORD#{i_record} - Thread: 1 RBA: 0x{:06x}.{:08x}.{:04x} LEN: 0x{:04x} VLD: 0x{:02x} CON_UID: ?",
+        rba.seq, rba.block_id, rba.offset, head.len, head.vld,
+    );
     println!(
         "SCN: 0x{:016x} SUBSCN:  {} {}",
         head.scn.base,
         head.scn.wrapper, // TODO verify
-        format_timestamp(ts),
+        OracleDateTime::from(ts),
     );
     println!(
-        "(LWN RBA: 0x{:06x}.0x{:08x}.0x{:04x} LEN: 0x???????? NST: 0x???? SCN: 0x{:016x})",
-        rba.seq, rba.block_id, rba.offset, head.scn.base,
+        "(LWN RBA: 0x{:06x}.{:08x}.{:04x} LEN: 0x???????? NST: 0x???? SCN: 0x????????????????)",
+        rba.seq, rba.block_id, rba.offset,
     );
 }
 
@@ -138,26 +169,21 @@ fn read_redo(file: PathBuf) -> Result<(), ReaderError> {
     while let Some((rba, record)) = reader.begin_read_record()? {
         // println!("Record#{i_record}: {record:?}");
         println!();
-        println!(
-            "REDO RECORD#{i_record} - Thread: 1 RBA: 0x{:06x}.0x{:08x}.0x{:04x}",
-            rba.seq, rba.block_id, rba.offset
-        );
-
         match record {
-            Record::V1(v1) => print_record_head(rba, &v1.common, OracleTimestamp(0)),
-            Record::V2(v2) => print_record_head(rba, &v2.common, v2.begin_time),
+            Record::V1(v1) => print_record_head(i_record, rba, &v1.common, OracleTimestamp(0)),
+            Record::V2(v2) => print_record_head(i_record, rba, &v2.common, v2.begin_time),
         }
 
         let mut i_change = 1usize;
         while let Some(change) = reader.read_change()? {
             println!(
-                "CHANGE #{i_change} CON_ID:? TYP:{} CLS:{} AFN:{} DBA:{:?} OBJ:{} SCN:{} SEQ:{} OP:{}.{} ENC:? RBL:? FLG:0x????",
+                "CHANGE #{i_change} CON_ID:? TYP:{} CLS:{} AFN:{} DBA:{:?} OBJ:{} SCN:0x{:016x} SEQ:{} OP:{}.{} ENC:? RBL:? FLG:0x????",
                 change.change.type_,
                 change.change.block_class,
                 change.change.file_number,
                 change.change.dba,
                 change.change.obj(),
-                change.change.scn.to_u64(),
+                change.change.scn.base,
                 change.change.seq,
                 change.change.layer,
                 change.change.op,
