@@ -260,7 +260,7 @@ impl DBA {
     }
 
     pub fn relative_file_number(&self) -> u32 {
-        self.0 & 0xFFC0_0000
+        (self.0 & 0xFFC0_0000) >> 22
     }
 }
 
