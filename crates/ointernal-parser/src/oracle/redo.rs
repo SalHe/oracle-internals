@@ -5,7 +5,7 @@ use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout};
 
 use crate::oracle::timestamp::OracleTimestamp;
 
-#[derive(KnownLayout, Immutable, FromBytes, Debug)]
+#[derive(KnownLayout, Immutable, FromBytes, IntoBytes, Debug)]
 #[repr(C)]
 pub struct RedoBlockHead {
     pub magic_number: u32,

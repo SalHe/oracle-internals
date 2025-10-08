@@ -9,6 +9,7 @@ use thiserror::Error;
 use zerocopy::FromBytes;
 
 use crate::oracle::{
+    checksum::calc_checksum,
     file::{FileHeader, FileHeaderBlock},
     redo::{
         Change, RedoBlockHead, RedoFileHead, RedoRecordHeadCommon, RedoRecordHeadV1,
@@ -35,6 +36,14 @@ pub enum ReaderError {
     AlreadyInRecord,
     #[error("cannot read change when no record being read")]
     NotReadingRecord,
+    #[error(
+        "invalid checksum for block#{block_id}, expected 0x{expected:04x}, actual 0x{actual:04x}"
+    )]
+    InvalidChecksum {
+        block_id: u32,
+        expected: u16,
+        actual: u16,
+    },
     #[error("read to EOF")]
     Eof,
     #[error("io error: {0:?}")]
@@ -123,7 +132,17 @@ impl RedoFileReader {
             }
             _ => {}
         };
-        // TODO checksum
+
+        let (calc_checksum, expected_checksum) = calc_checksum(&mut buffer).unwrap();
+        let (head, _) = RedoBlockHead::ref_from_prefix(&buffer).unwrap();
+        if calc_checksum != expected_checksum {
+            return Err(ReaderError::InvalidChecksum {
+                block_id: head.id,
+                expected: expected_checksum,
+                actual: calc_checksum,
+            });
+        }
+
         Ok(buffer)
     }
 
