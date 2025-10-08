@@ -6,7 +6,7 @@ use std::{
 };
 
 use thiserror::Error;
-use zerocopy::FromBytes;
+use zerocopy::{CastError, FromBytes};
 
 use crate::oracle::{
     checksum::calc_checksum,
@@ -54,6 +54,11 @@ pub enum ReaderError {
     Io(#[from] std::io::Error),
 }
 
+#[derive(Debug, Default)]
+pub struct ReadOptions {
+    pub ignore_checksum: bool,
+}
+
 pub struct RedoFileReader {
     file: File,
 
@@ -68,6 +73,7 @@ pub struct RedoFileReader {
     offset_in_block: usize,
     content_offset: usize,
     curr_record: Option<Record>,
+    options: ReadOptions,
 }
 
 impl RedoFileReader {
@@ -82,14 +88,15 @@ impl RedoFileReader {
             offset_in_block: 0,
             content_offset: 0,
             curr_record: None,
+            options: Default::default(),
         })
     }
 
     /// 重新读取文件头，文件读取指针将被重置
     pub fn reload_header(&mut self) -> Result<(), ReaderError> {
-        self.read_file_header()?;
+        unsafe { self.read_file_header()? };
         self.read_redo_file_header()?;
-        self.next_redo_block()?;
+        self.next_redo_block_impl()?;
         Ok(())
     }
 
@@ -106,7 +113,11 @@ impl RedoFileReader {
             .unwrap()
     }
 
-    fn read_file_header(&mut self) -> Result<(), ReaderError> {
+    pub fn set_options(&mut self) -> &mut ReadOptions {
+        &mut self.options
+    }
+
+    pub unsafe fn read_file_header(&mut self) -> Result<(), ReaderError> {
         // 确认block大小
         self.file.seek(std::io::SeekFrom::Start(0))?;
         let mut buffer = [0u8; std::mem::size_of::<FileHeader>()];
@@ -142,7 +153,7 @@ impl RedoFileReader {
 
         let (calc_checksum, expected_checksum) = calc_checksum(&mut buffer).unwrap();
         let (head, _) = RedoBlockHead::ref_from_prefix(&buffer).unwrap();
-        if calc_checksum != expected_checksum {
+        if calc_checksum != expected_checksum && !self.options.ignore_checksum {
             return Err(ReaderError::InvalidChecksum {
                 block_id: head.id,
                 expected: expected_checksum,
@@ -157,10 +168,20 @@ impl RedoFileReader {
         Ok(buffer)
     }
 
-    fn next_redo_block(&mut self) -> Result<(), ReaderError> {
+    fn next_redo_block_impl(&mut self) -> Result<(), ReaderError> {
         self.curr_block = self.read_block()?;
         self.offset_in_block = std::mem::size_of::<RedoBlockHead>();
         Ok(())
+    }
+
+    pub unsafe fn next_redo_block(&mut self) -> Result<(), ReaderError> {
+        self.next_redo_block_impl()
+    }
+
+    pub fn calc_curr_block_checksum(
+        &mut self,
+    ) -> Result<(u16, u16), CastError<&mut [u8], RedoBlockHead>> {
+        calc_checksum(&mut self.curr_block)
     }
 
     pub fn begin_read_record(&mut self) -> Result<Option<(RBA, Record)>, ReaderError> {
@@ -175,7 +196,7 @@ impl RedoFileReader {
             std::mem::size_of::<RedoRecordHeadV1>(),
         );
         if self.file_header().header.block_size as usize - self.offset_in_block < min_size {
-            self.next_redo_block()?;
+            self.next_redo_block_impl()?;
         }
 
         loop {
@@ -213,7 +234,7 @@ impl RedoFileReader {
             }
 
             if record.len == 0 {
-                self.next_redo_block()?;
+                self.next_redo_block_impl()?;
                 continue;
             }
 
@@ -238,7 +259,7 @@ impl RedoFileReader {
                 self.offset_in_block += can_read;
 
                 if self.offset_in_block == self.file_header().header.block_size as usize {
-                    self.next_redo_block()?;
+                    self.next_redo_block_impl()?;
                 }
             }
         } else {
