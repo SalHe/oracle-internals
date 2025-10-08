@@ -22,6 +22,13 @@ pub enum Record {
     V2(RedoRecordHeadV2),
 }
 
+#[derive(Debug)]
+pub struct RBA {
+    pub seq: u32,
+    pub block_id: u32,
+    pub offset: u16,
+}
+
 #[derive(Error, Debug)]
 pub enum ReaderError {
     #[error("current record is being reading")]
@@ -126,7 +133,7 @@ impl RedoFileReader {
         Ok(())
     }
 
-    pub fn begin_read_record(&mut self) -> Result<Option<Record>, ReaderError> {
+    pub fn begin_read_record(&mut self) -> Result<Option<(RBA, Record)>, ReaderError> {
         if self.in_record {
             return Err(ReaderError::AlreadyInRecord);
         }
@@ -147,6 +154,12 @@ impl RedoFileReader {
                     ..(self.offset_in_block + std::mem::size_of::<RedoRecordHeadCommon>())],
             )
             .unwrap();
+            let block_head = self.curr_block_head();
+            let rba = RBA {
+                seq: block_head.seq,
+                block_id: block_head.id,
+                offset: self.offset_in_block as _,
+            };
 
             let vld = VldFlags::from_bits(record.vld).unwrap();
             if vld.contains(VldFlags::KCRVOID) {
@@ -174,7 +187,7 @@ impl RedoFileReader {
                 continue;
             }
 
-            return Ok(self.curr_record);
+            return Ok(self.curr_record.map(|r| (rba, r)));
         }
     }
 

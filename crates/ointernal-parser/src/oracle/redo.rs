@@ -1,14 +1,16 @@
+use std::mem::transmute;
+
 use bitflags::bitflags;
 use zerocopy::{FromBytes, Immutable, KnownLayout};
 
 #[derive(KnownLayout, Immutable, FromBytes, Debug)]
 #[repr(C)]
 pub struct RedoBlockHead {
-    magic_number: u32,
-    id: u32,
-    seq: u32,
-    offset: u16,
-    checksum: u16,
+    pub magic_number: u32,
+    pub id: u32,
+    pub seq: u32,
+    pub offset: u16,
+    pub checksum: u16,
 }
 
 impl RedoBlockHead {
@@ -20,67 +22,85 @@ impl RedoBlockHead {
 #[derive(KnownLayout, Immutable, FromBytes, Debug, Clone, Copy)]
 #[repr(C)]
 pub struct Scn {
-    base: u32,
-    wrapper: u16,
-    _unknown: u16,
+    pub base: u32,
+    pub wrapper: u16,
+    pub _unknown: u16,
+}
+
+impl Scn {
+    pub fn to_u64(self) -> u64 {
+        self.into()
+    }
+}
+
+impl Into<u64> for Scn {
+    fn into(self) -> u64 {
+        unsafe { transmute(self) }
+    }
 }
 
 #[derive(KnownLayout, Immutable, FromBytes, Debug, Clone, Copy)]
 #[repr(transparent)]
-pub struct OracleTimestamp(u32);
+pub struct OracleTimestamp(pub u32);
+
+impl OracleTimestamp {
+    pub fn real_timestamp(&self) -> u32 {
+        self.0 + 545961600
+    }
+}
 
 #[derive(KnownLayout, Immutable, FromBytes, Debug)]
 #[repr(C)]
 pub struct RedoFileHead {
-    head: RedoBlockHead,
+    pub head: RedoBlockHead,
     _unknown_1: [u8; 4],
-    vsn: u32,
-    db_id: u32,
-    db_name: [u8; 8],
-    control_seq: u32,
+    pub vsn: u32,
+    pub db_id: u32,
+    pub db_name: [u8; 8],
+    pub control_seq: u32,
     _unknown_7: [u8; 8],
-    file_number: u16,
-    file_type: u16,
-    activation_id: u32,
+    pub file_number: u16,
+    pub file_type: u16,
+    pub activation_id: u32,
     _zeros_1: [u8; 36],
-    description: [u8; 64],
+    pub description: [u8; 64],
 
-    nab: u32,
+    pub nab: u32,
 
-    reset_logs_count: u32,
-    reset_log_scn: Scn,
-    hws: u8,
+    pub reset_logs_count: u32,
+    pub reset_log_scn: Scn,
+    pub hws: u8,
     _unknown_2: [u8; 7],
 
-    low_scn: Scn,
-    low_scn_timestamp: OracleTimestamp,
+    pub low_scn: Scn,
+    pub low_scn_timestamp: OracleTimestamp,
 
-    next_scn: Scn,
-    next_scn_timestamp: OracleTimestamp,
+    pub next_scn: Scn,
+    pub next_scn_timestamp: OracleTimestamp,
 
     _unknown_3: [u8; 4],
 
-    enabled_scn: Scn,
-    enabled_scn_timestamp: OracleTimestamp,
+    pub enabled_scn: Scn,
+    pub enabled_scn_timestamp: OracleTimestamp,
 
-    thread_closed_scn: Scn,
-    thread_closed_scn_timestamp: OracleTimestamp,
+    pub thread_closed_scn: Scn,
+    pub thread_closed_scn_timestamp: OracleTimestamp,
 
     _unknown_4: [u8; 4],
 
-    misc_flags: u32,
-    misc_flags2: u32,
+    pub misc_flags: u32,
+    pub misc_flags2: u32,
 
     _unknown_5: [u8; 28],
-    real_next_scn: Scn,
+    pub real_next_scn: Scn,
 
     _unknown_6: [u8; 4],
-    prev_reset_logs_scn: Scn,
-    prev_reset_logs_count: u32,
+    pub prev_reset_logs_scn: Scn,
+    pub prev_reset_logs_count: u32,
 
     _zeros_2: [u8; 152],
 
-    log_key: [u8; 16],
+    pub log_key: [u8; 16],
     trailing: [u8],
 }
 
@@ -122,7 +142,7 @@ pub struct RedoRecordHeadV1 {
     _unknown_2: [u8; 8],
 }
 
-#[derive(KnownLayout, Immutable, FromBytes, Debug, Clone, Copy)]
+#[derive(KnownLayout, Immutable, FromBytes, Clone, Copy)]
 #[repr(transparent)]
 pub struct DBA(u32);
 
@@ -133,6 +153,18 @@ impl DBA {
 
     pub fn relative_file_number(&self) -> u32 {
         self.0 & 0xFFC0_0000
+    }
+}
+
+impl std::fmt::Debug for DBA {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "DBA(block_id: {}, file_number: {})={:x}",
+            self.block_id(),
+            self.relative_file_number(),
+            self.0,
+        )
     }
 }
 
