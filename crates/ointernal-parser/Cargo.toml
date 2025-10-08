@@ -1,0 +1,9 @@
+[package]
+name = "ointernal-parser"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bitflags = "2.9.4"
+thiserror = "2.0.17"
+zerocopy = { version = "0.8.27", features = ["derive"] }
