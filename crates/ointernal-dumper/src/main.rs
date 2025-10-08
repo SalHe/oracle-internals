@@ -58,38 +58,40 @@ fn print_header_info(fh: &FileHeaderBlock, rh: &RedoFileHead) {
     );
     println!(r#" descrip:"{}""#, String::from_utf8_lossy(&rh.description));
     println!(
-        " thread: 1 nab: 0x{:x} seq: 0x{:08x} hws: 0x{:x} eot: 0 dis: 0", // TODO other fields?
-        rh.nab, rh.head.seq, rh.hws,
+        " thread: {} nab: 0x{:x} seq: 0x{:08x} hws: 0x{:x} eot: 0 dis: 0",
+        rh.thread, rh.nab, rh.head.seq, rh.hws,
     );
     println!(
         " resetlogs count: 0x{:08x} scn: 0x{:016x}",
-        rh.reset_logs_count, rh.reset_log_scn.base,
+        rh.reset_logs_count,
+        rh.reset_log_scn.full_scn(),
     );
     println!(
         " prev resetlogs count: 0x{:08x} scn: 0x{:016x}",
-        rh.prev_reset_logs_count, rh.prev_reset_logs_scn.base,
+        rh.prev_reset_logs_count,
+        rh.prev_reset_logs_scn.full_scn(),
     );
     println!(
         " Low  scn: 0x{:016x} {}",
-        rh.low_scn.base,
+        rh.low_scn.full_scn(),
         OracleDateTime::from(rh.low_scn_timestamp)
     );
     println!(
         " Next scn: 0x{:016x} {}",
-        rh.next_scn.base,
+        rh.next_scn.full_scn(),
         OracleDateTime::from(rh.next_scn_timestamp),
     );
     println!(
         " Enabled scn: 0x{:016x} {}",
-        rh.enabled_scn.base,
+        rh.enabled_scn.full_scn(),
         OracleDateTime::from(rh.enabled_scn_timestamp),
     );
     println!(
         " Thread closed scn: 0x{:016x} {}",
-        rh.thread_closed_scn.base,
+        rh.thread_closed_scn.full_scn(),
         OracleDateTime::from(rh.thread_closed_scn_timestamp),
     );
-    println!(" Real next scn: 0xffffffffffffffff"); // TODO ?source
+    println!(" Real next scn: 0x{:016x}", rh.real_next_scn.full_scn());
     println!(" Disk cksum: 0x{:04x} Calc cksum: 0x????", rh.head.checksum); // TODO calc checksum
     println!(" Terminal recovery stop scn: 0x0000000000000000"); // ?
     println!(
@@ -144,8 +146,8 @@ fn print_record_head(i_record: usize, rba: RBA, head: &RedoRecordHeadCommon, ts:
     );
     println!(
         "SCN: 0x{:016x} SUBSCN:  {} {}",
-        head.scn.base,
-        head.scn.wrapper, // TODO verify
+        head.scn.full_scn(),
+        head.sub_scn,
         OracleDateTime::from(ts),
     );
     println!(
@@ -183,7 +185,7 @@ fn read_redo(file: PathBuf) -> Result<(), ReaderError> {
                 change.change.file_number,
                 change.change.dba,
                 change.change.obj(),
-                change.change.scn.base,
+                change.change.scn.full_scn(),
                 change.change.seq,
                 change.change.layer,
                 change.change.op,

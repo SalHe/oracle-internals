@@ -1,7 +1,7 @@
 use std::mem::transmute;
 
 use bitflags::bitflags;
-use zerocopy::{FromBytes, Immutable, KnownLayout};
+use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout};
 
 use crate::oracle::timestamp::OracleTimestamp;
 
@@ -10,7 +10,8 @@ use crate::oracle::timestamp::OracleTimestamp;
 pub struct RedoBlockHead {
     pub magic_number: u32,
     pub id: u32,
-    pub seq: u32,
+    pub seq: u16,
+    _unknown_1: u16,
     pub offset: u16,
     pub checksum: u16,
 }
@@ -21,7 +22,7 @@ impl RedoBlockHead {
     }
 }
 
-#[derive(KnownLayout, Immutable, FromBytes, Debug, Clone, Copy)]
+#[derive(KnownLayout, Immutable, FromBytes, IntoBytes, Debug, Clone, Copy)]
 #[repr(C)]
 pub struct Scn {
     pub base: u32,
@@ -30,8 +31,23 @@ pub struct Scn {
 }
 
 impl Scn {
-    pub fn to_u64(self) -> u64 {
-        self.into()
+    pub fn full_scn(self) -> u64 {
+        let mut wrapper = self.wrapper as u32;
+        if self.wrapper & 0xFFFE == 0xFFFE {
+            if wrapper == 0xFFFF {
+                return (self.base as u64) | 0xFFFF_FFFF_0000_0000u64;
+            }
+
+            if unsafe { transmute::<_, u64>(self) } == 0xFFFFFFFEFFFFFFFFu64 {
+                return 0x7FFEFFFFFFFFFFFFu64;
+            }
+        }
+
+        if self.wrapper & 0x8000 != 0 {
+            wrapper = self._unknown as u32 | ((wrapper & 0x7FFF) << 16);
+        }
+
+        (self.base as u64) | ((wrapper as u64) << 32)
     }
 }
 
@@ -63,7 +79,10 @@ pub struct RedoFileHead {
     pub reset_logs_count: u32,
     pub reset_log_scn: Scn,
     pub hws: u8,
-    _unknown_2: [u8; 7],
+    _unknown_2: [u8; 3],
+
+    pub thread: u16,
+    _unknown_11: [u8; 2],
 
     pub low_scn: Scn,
     pub low_scn_timestamp: OracleTimestamp,
@@ -214,13 +233,14 @@ pub struct RedoRecordHeadCommon {
     _unknown_1: u8,
     pub sub_scn: u16,
     pub scn: Scn,
+    _unknown_2: [u8; 8],
 }
 
 #[derive(KnownLayout, Immutable, FromBytes, Debug, Clone, Copy)]
 #[repr(C)]
 pub struct RedoRecordHeadV2 {
     pub common: RedoRecordHeadCommon,
-    _unknown_2: [u8; 48],
+    _unknown_1: [u8; 40],
     pub begin_time: OracleTimestamp,
 }
 
@@ -228,7 +248,6 @@ pub struct RedoRecordHeadV2 {
 #[repr(C)]
 pub struct RedoRecordHeadV1 {
     pub common: RedoRecordHeadCommon,
-    _unknown_2: [u8; 8],
 }
 
 #[derive(KnownLayout, Immutable, FromBytes, Clone, Copy)]

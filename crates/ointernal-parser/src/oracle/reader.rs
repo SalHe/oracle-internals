@@ -24,7 +24,7 @@ pub enum Record {
 
 #[derive(Debug)]
 pub struct RBA {
-    pub seq: u32,
+    pub seq: u16,
     pub block_id: u32,
     pub offset: u16,
 }
