@@ -165,4 +165,13 @@ impl Change {
     pub fn vector_count(&self) -> u16 {
         self.change_list_len / 2 - 1
     }
+
+    pub fn need_padding(&self) -> bool {
+        if self.vector_count() == 0 {
+            // consumed by [first_vector_size]
+            return false;
+        }
+
+        return self.vector_count() % 2 == 0;
+    }
 }

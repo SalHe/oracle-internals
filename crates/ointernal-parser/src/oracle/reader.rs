@@ -229,14 +229,17 @@ impl RedoFileReader {
 
         let change = *Change::ref_from_bytes(&change_buffer).unwrap();
         let mut vector_size = Vec::with_capacity(change.vector_count() as usize);
-        vector_size.push(change.first_vector_size);
+        if change.vector_count() > 0 {
+            vector_size.push(change.first_vector_size);
+        }
+
         for _ in 1..change.vector_count() {
             let mut buffer = [0u8; 2];
             self.read_content(&mut buffer)?;
             vector_size.push(u16::from_le_bytes(buffer));
         }
 
-        if change.vector_count() % 2 == 0 {
+        if change.need_padding() {
             self.content_offset += 2;
             self.offset_in_block += 2;
         }
