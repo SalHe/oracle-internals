@@ -44,6 +44,10 @@ pub enum ReaderError {
         expected: u16,
         actual: u16,
     },
+    #[error("Magic number of file header is not correct")]
+    InvalidFileMagicNumber,
+    #[error("Magic number of redo block is not correct")]
+    InvalidRedoBlockMagicNumber,
     #[error("read to EOF")]
     Eof,
     #[error("io error: {0:?}")]
@@ -108,6 +112,9 @@ impl RedoFileReader {
         let mut buffer = [0u8; std::mem::size_of::<FileHeader>()];
         self.file.read_exact(&mut buffer)?;
         let header = FileHeader::ref_from_bytes(&buffer).unwrap();
+        if header.magic_number != FileHeader::MAGIC_NUMBER {
+            return Err(ReaderError::InvalidFileMagicNumber);
+        }
 
         // 实际读取 block0
         self.file.seek(std::io::SeekFrom::Start(0))?;
@@ -141,6 +148,10 @@ impl RedoFileReader {
                 expected: expected_checksum,
                 actual: calc_checksum,
             });
+        }
+
+        if head.magic_number != RedoBlockHead::MAGIC_NUMBER {
+            return Err(ReaderError::InvalidRedoBlockMagicNumber);
         }
 
         Ok(buffer)

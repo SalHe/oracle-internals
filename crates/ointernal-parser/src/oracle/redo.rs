@@ -17,6 +17,8 @@ pub struct RedoBlockHead {
 }
 
 impl RedoBlockHead {
+    pub const MAGIC_NUMBER: u32 = 0x2201;
+
     pub fn offset(&self) -> u16 {
         self.offset & 0x7FFF
     }
@@ -33,7 +35,7 @@ pub struct Scn {
 impl Scn {
     pub fn full_scn(self) -> u64 {
         let mut wrapper = self.wrapper as u32;
-        if self.wrapper & 0xFFFE == 0xFFFE {
+        if self._unknown & 0xFFFE == 0xFFFE {
             if wrapper == 0xFFFF {
                 return (self.base as u64) | 0xFFFF_FFFF_0000_0000u64;
             }
@@ -231,9 +233,33 @@ pub struct RedoRecordHeadCommon {
     pub len: u32,
     pub vld: u8,
     _unknown_1: u8,
+    // TODO bytes' order of scn?
+    scn_byte4: u8,
+    scn_byte5: u8,
+    scn_byte0: u8,
+    scn_byte1: u8,
+    scn_byte2: u8,
+    scn_byte3: u8,
     pub sub_scn: u16,
-    pub scn: Scn,
+    scn_byte6: u8,
+    scn_byte7: u8,
     _unknown_2: [u8; 8],
+}
+
+impl RedoRecordHeadCommon {
+    pub fn scn(&self) -> Scn {
+        let bytes = [
+            self.scn_byte0,
+            self.scn_byte1,
+            self.scn_byte2,
+            self.scn_byte3,
+            self.scn_byte4,
+            self.scn_byte5,
+            self.scn_byte6,
+            self.scn_byte7,
+        ];
+        Scn::read_from_bytes(&bytes).unwrap()
+    }
 }
 
 #[derive(KnownLayout, Immutable, FromBytes, Debug, Clone, Copy)]

@@ -152,7 +152,7 @@ fn print_record_head(i_record: usize, rba: RBA, head: &RedoRecordHeadCommon, ts:
     );
     println!(
         "SCN: 0x{:016x} SUBSCN:  {} {}",
-        head.scn.full_scn(),
+        head.scn().full_scn(),
         head.sub_scn,
         OracleDateTime::from(ts),
     );

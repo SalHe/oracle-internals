@@ -10,6 +10,10 @@ pub struct FileHeader {
     _unknown_2: u32,
 }
 
+impl FileHeader {
+    pub const MAGIC_NUMBER: u32 = 0x7A7B7C7D;
+}
+
 #[derive(KnownLayout, Immutable, FromBytes, Debug)]
 #[repr(C)]
 pub struct FileHeaderBlock {
