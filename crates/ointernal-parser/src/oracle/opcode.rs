@@ -25,10 +25,7 @@ macro_rules! codes_for_layer {
                 match LayerCode::from_u8(in_layer) {
                     Some(parsed_layer_code) => match parsed_layer_code {
                         $(
-                            LayerCode::$layer_name => match $layer_name::from_u8(in_op) {
-                                Some(parsed_op_code) => Some(Op::$layer_name(parsed_op_code)),
-                                None => None,
-                            },
+                            LayerCode::$layer_name => $layer_name::from_u8(in_op).map(Op::$layer_name),
                         )*
                     },
                     None => None,

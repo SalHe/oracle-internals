@@ -9,6 +9,7 @@ use thiserror::Error;
 use zerocopy::{CastError, FromBytes};
 
 use crate::oracle::{
+    change::ChangeAndVector,
     checksum::calc_checksum,
     file::{FileHeader, FileHeaderBlock},
     redo::{
@@ -321,10 +322,4 @@ fn padding_size(size: u64, alignment: u64) -> u64 {
     } else {
         size + alignment - (size % alignment)
     }
-}
-
-#[derive(Debug)]
-pub struct ChangeAndVector {
-    pub change: Change,
-    pub vector: Vec<Vec<u8>>,
 }

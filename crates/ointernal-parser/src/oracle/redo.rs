@@ -1,7 +1,7 @@
 use bitflags::bitflags;
 use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout};
 
-use crate::oracle::{scn::Scn, timestamp::OracleTimestamp};
+use crate::oracle::{opcode::Op, scn::Scn, timestamp::OracleTimestamp};
 
 #[derive(KnownLayout, Immutable, FromBytes, IntoBytes, Debug)]
 #[repr(C)]
@@ -330,5 +330,10 @@ impl Change {
         }
 
         self.vector_count().is_multiple_of(2)
+    }
+
+    /// Get op of current change, if not recognized, return [None].
+    pub fn op(&self) -> Option<Op> {
+        Op::parse((self.layer, self.op))
     }
 }

@@ -6,3 +6,4 @@ pub mod reader;
 pub mod redo;
 pub mod scn;
 pub mod timestamp;
+pub mod change;
