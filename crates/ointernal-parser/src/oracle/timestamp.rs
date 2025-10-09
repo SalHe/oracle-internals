@@ -18,7 +18,7 @@ impl OracleTimestamp {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DateTime {
     pub year: u16,   // 年份 (从1988开始计算)
     pub month: u16,  // 月份 (1-12)
@@ -66,5 +66,52 @@ impl Display for DateTime {
             "{:02}/{:02}/{:04} {:02}:{:02}:{:02}",
             self.month, self.day, self.year, self.hour, self.minute, self.second,
         )
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::oracle::timestamp::{DateTime, OracleTimestamp};
+
+    #[test]
+    fn init_time() {
+        let dt = DateTime::from(OracleTimestamp(0));
+        assert_eq!(
+            DateTime {
+                year: 1988,
+                month: 1,
+                day: 1,
+                hour: 0,
+                minute: 0,
+                second: 0,
+            },
+            dt
+        );
+    }
+
+    #[test]
+    fn normal_time() {
+        assert_eq!(
+            DateTime {
+                year: 2025,
+                month: 10,
+                day: 5,
+                hour: 3,
+                minute: 28,
+                second: 3,
+            },
+            DateTime::from(OracleTimestamp(1213673283)),
+        );
+        assert_eq!(
+            DateTime {
+                year: 2025,
+                month: 10,
+                day: 06,
+                hour: 5,
+                minute: 58,
+                second: 24,
+            },
+            DateTime::from(OracleTimestamp(1213768704)),
+        );
     }
 }

@@ -68,6 +68,8 @@ mod test {
             107, 70, 62, 46, 150, 21, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ];
+        // TODO make sure alignment of 8
+        println!("{:?}", &block[0] as *const u8);
         let expected = 0x37e8u16;
         let (calc, recorded) = calc_checksum(&mut block).unwrap();
         assert_eq!(expected, calc);

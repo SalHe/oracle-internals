@@ -1,9 +1,7 @@
-use std::mem::transmute;
-
 use bitflags::bitflags;
 use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout};
 
-use crate::oracle::timestamp::OracleTimestamp;
+use crate::oracle::{scn::Scn, timestamp::OracleTimestamp};
 
 #[derive(KnownLayout, Immutable, FromBytes, IntoBytes, Debug)]
 #[repr(C)]
@@ -21,41 +19,6 @@ impl RedoBlockHead {
 
     pub fn offset(&self) -> u16 {
         self.offset & 0x7FFF
-    }
-}
-
-#[derive(KnownLayout, Immutable, FromBytes, IntoBytes, Debug, Clone, Copy)]
-#[repr(C)]
-pub struct Scn {
-    pub base: u32,
-    pub wrapper: u16,
-    pub marker: u16,
-}
-
-impl Scn {
-    pub fn full_scn(self) -> u64 {
-        let mut wrapper = self.wrapper as u32;
-        if self.marker & 0xFFFE == 0xFFFE {
-            if wrapper == 0xFFFF {
-                return (self.base as u64) | 0xFFFF_FFFF_0000_0000u64;
-            }
-
-            if unsafe { transmute::<_, u64>(self) } == 0xFFFFFFFEFFFFFFFFu64 {
-                return 0x7FFEFFFFFFFFFFFFu64;
-            }
-        }
-
-        if self.wrapper & 0x8000 != 0 {
-            wrapper = self.marker as u32 | ((wrapper & 0x7FFF) << 16);
-        }
-
-        (self.base as u64) | ((wrapper as u64) << 32)
-    }
-}
-
-impl Into<u64> for Scn {
-    fn into(self) -> u64 {
-        unsafe { transmute(self) }
     }
 }
 
