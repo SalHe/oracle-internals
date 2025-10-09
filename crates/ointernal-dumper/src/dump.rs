@@ -23,7 +23,7 @@ fn print_example_infos() {
 
 fn print_header_info(fh: &FileHeaderBlock, rh: &RedoFileHead) {
     println!(" FILE HEADER:");
-    println!("	Compatibility Vsn = {}=0x{:08X}", rh.vsn, rh.vsn,);
+    println!("	Compatibility Vsn = {}=0x{:08X}", rh.vsn, rh.vsn);
     println!(
         "	Db ID={}=0x{:08X}, Db Name='{}'",
         rh.db_id,
@@ -50,8 +50,8 @@ fn print_header_info(fh: &FileHeaderBlock, rh: &RedoFileHead) {
     );
     println!(r#" descrip:"{}""#, String::from_utf8_lossy(&rh.description));
     println!(
-        " thread: {} nab: 0x{:x} seq: 0x{:08x} hws: 0x{:x} eot: 0 dis: 0",
-        rh.thread, rh.nab, rh.head.seq, rh.hws,
+        " thread: {} nab: 0x{:x} seq: 0x{:08x} hws: 0x{:x} eot: {} dis: {}",
+        rh.thread, rh.nab, rh.head.seq, rh.hws, rh.dis, rh.eot,
     );
     println!(
         " resetlogs count: 0x{:08x} scn: 0x{:016x}",
@@ -117,6 +117,21 @@ fn print_header_info(fh: &FileHeaderBlock, rh: &RedoFileHead) {
         rh.thread_internal_enable_seq,
         rh.thread_internal_enable_scn.base,
     );
+
+    if rh.standby_apply_delay_minutes != 0 {
+        println!(
+            " Standby Apply Delay: {} minute(s) ",
+            rh.standby_apply_delay_minutes
+        );
+    }
+
+    if rh.standby_log_close_time.0 != 0 {
+        println!(
+            " Standby Log Close Time:  {}",
+            OracleDateTime::from(rh.standby_log_close_time)
+        );
+    }
+
     println!(" Zero blocks: {}", rh.zero_blocks);
     println!(" Format ID is {}", rh.format_id);
     println!(" redo log key is {}", hex::encode(rh.log_key));
@@ -139,8 +154,8 @@ fn print_header_info(fh: &FileHeaderBlock, rh: &RedoFileHead) {
 
 fn print_record_head(i_record: usize, rba: RBA, head: &RedoRecordHeadCommon, ts: OracleTimestamp) {
     println!(
-        "REDO RECORD#{i_record} - Thread: 1 RBA: 0x{:06x}.{:08x}.{:04x} LEN: 0x{:04x} VLD: 0x{:02x} CON_UID: ?",
-        rba.seq, rba.block_id, rba.offset, head.len, head.vld,
+        "REDO RECORD#{i_record} - Thread: 1 RBA: 0x{:06x}.{:08x}.{:04x} LEN: 0x{:04x} VLD: 0x{:02x} CON_UID: {}",
+        rba.seq, rba.block_id, rba.offset, head.len, head.vld, head.con_uid,
     );
     println!(
         "SCN: 0x{:016x} SUBSCN:  {} {}",
@@ -167,7 +182,6 @@ pub fn read_redo(file: PathBuf) -> Result<(), ReaderError> {
 
     let mut i_record = 1usize;
     while let Some((rba, record)) = reader.begin_read_record()? {
-        // println!("Record#{i_record}: {record:?}");
         println!();
         match record {
             Record::V1(v1) => print_record_head(i_record, rba, &v1.common, OracleTimestamp(0)),
@@ -177,11 +191,11 @@ pub fn read_redo(file: PathBuf) -> Result<(), ReaderError> {
         let mut i_change = 1usize;
         while let Some(change) = reader.read_change()? {
             println!(
-                "CHANGE #{i_change} CON_ID:? TYP:{} CLS:{} AFN:{} DBA:{:?} OBJ:{} SCN:0x{:016x} SEQ:{} OP:{}.{} ENC:? RBL:? FLG:0x????",
+                "CHANGE #{i_change} CON_ID:? TYP:{} CLS:{} AFN:{} DBA:{:08x} OBJ:{} SCN:0x{:016x} SEQ:{} OP:{}.{} ENC:? RBL:? FLG:0x????",
                 change.change.type_,
                 change.change.block_class,
                 change.change.file_number,
-                change.change.dba,
+                change.change.dba.0,
                 change.change.obj(),
                 change.change.scn.full_scn(),
                 change.change.seq,

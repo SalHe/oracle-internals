@@ -63,27 +63,33 @@ impl Into<u64> for Scn {
 #[repr(C)]
 pub struct RedoFileHead {
     pub head: RedoBlockHead,
+
+    /// #{AMND}
     _unknown_1: [u8; 4],
+
     pub vsn: u32,
     pub db_id: u32,
     pub db_name: [u8; 8],
     pub control_seq: u32,
     pub file_size: u32,
-    _unknown_7: [u8; 4],
+    pub block_size: u32,
     pub file_number: u16,
     pub file_type: u16,
     pub activation_id: u32,
+
+    /// #{AMND}
     _zeros_1: [u8; 36],
+
     pub description: [u8; 64],
 
     pub nab: u32,
 
     pub reset_logs_count: u32,
     pub reset_log_scn: Scn,
-    pub hws: u8,
-    _unknown_2: [u8; 3],
-
+    pub hws: u32,
     pub thread: u16,
+
+    /// #{AMND}
     _unknown_11: [u8; 2],
 
     pub low_scn: Scn,
@@ -92,7 +98,8 @@ pub struct RedoFileHead {
     pub next_scn: Scn,
     pub next_scn_timestamp: OracleTimestamp,
 
-    _unknown_3: [u8; 2],
+    pub eot: u8,
+    pub dis: u8,
     pub zero_blocks: u8,
     pub format_id: u8,
 
@@ -102,6 +109,7 @@ pub struct RedoFileHead {
     pub thread_closed_scn: Scn,
     pub thread_closed_scn_timestamp: OracleTimestamp,
 
+    /// #{AMND}
     _unknown_4: [u8; 4],
 
     /// MiscFlags
@@ -115,12 +123,16 @@ pub struct RedoFileHead {
     pub largest_lwn: u32,
     pub real_next_scn: Scn,
 
-    _unknown_6: [u8; 4],
+    pub standby_apply_delay_minutes: i32,
     pub prev_reset_logs_scn: Scn,
     pub prev_reset_logs_count: u32,
 
     pub misc_flags2: u32,
-    _zeros_3: [u8; 8],
+
+    /// #{AMND}
+    _zeros_3: [u8; 4],
+
+    pub standby_log_close_time: OracleTimestamp,
     pub enabled_threads_bitmap2: [u8; 124],
 
     pub thread_internal_enable_tid: u32,
@@ -128,12 +140,19 @@ pub struct RedoFileHead {
     pub thread_internal_enable_scn: Scn,
 
     pub log_key: [u8; 16],
+
+    /// #{AMND}
     _unknown_9: [u8; 16],
+
     pub redo_key_flag: u16,
-    _unknown_10: u16,
+    /// #{AMND}
+    _unknown_10: [u8; 6],
+
     pub dax_hwm_block_number: u32,
     pub dax_flags: u16,
     pub dax_checksum: u16,
+
+    /// #{AMND}
     trailing: [u8],
 }
 
@@ -232,17 +251,27 @@ bitflags! {
 pub struct RedoRecordHeadCommon {
     pub len: u32,
     pub vld: u8,
+
+    /// #{AMND} padding?
     _unknown_1: u8,
+
+    /// scn consists of scn_byte0..8
     scn_byte4: u8,
     scn_byte5: u8,
+
     scn_byte0: u8,
     scn_byte1: u8,
     scn_byte2: u8,
     scn_byte3: u8,
+
     pub sub_scn: u16,
     scn_byte6: u8,
     scn_byte7: u8,
-    _unknown_2: [u8; 8],
+
+    pub con_uid: u32,
+
+    /// #{AMND} like padding?
+    _unknown_2: [u8; 4],
 }
 
 impl RedoRecordHeadCommon {
@@ -277,7 +306,7 @@ pub struct RedoRecordHeadV1 {
 
 #[derive(KnownLayout, Immutable, FromBytes, Clone, Copy)]
 #[repr(transparent)]
-pub struct DBA(u32);
+pub struct DBA(pub u32);
 
 impl DBA {
     pub fn block_id(&self) -> u32 {
