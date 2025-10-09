@@ -1,6 +1,7 @@
 pub mod checksum;
 pub mod file;
 pub mod fixer;
+pub mod opcode;
 pub mod reader;
 pub mod redo;
 pub mod scn;
