@@ -329,6 +329,6 @@ impl Change {
             return false;
         }
 
-        return self.vector_count() % 2 == 0;
+        self.vector_count().is_multiple_of(2)
     }
 }

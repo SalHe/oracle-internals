@@ -47,7 +47,7 @@ impl From<&OracleTimestamp> for DateTime {
                 as u64) as u32
             >> 4;
 
-        let _ = 0xAAAAAAAB as u64 * v6 as u64; // ???
+        let _ = 0xAAAAAAAB_u64 * v6 as u64; // ???
         Self {
             year: (v6 / 0xC + 1988) as _,
             month: (v6 % 0xC + 1) as _,

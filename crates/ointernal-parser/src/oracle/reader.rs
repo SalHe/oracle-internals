@@ -80,7 +80,7 @@ impl RedoFileReader {
     pub fn from_file<P: AsRef<Path>>(path: P) -> std::io::Result<Self> {
         let file = File::open(path)?;
         Ok(Self {
-            file: file,
+            file,
             block0: Default::default(),
             block1: Default::default(),
             curr_block: Default::default(),
@@ -94,9 +94,9 @@ impl RedoFileReader {
 
     /// 重新读取文件头，文件读取指针将被重置
     pub fn reload_header(&mut self) -> Result<(), ReaderError> {
-        unsafe { self.read_file_header()? };
+        self.read_file_header()?;
         self.read_redo_file_header()?;
-        self.next_redo_block_impl()?;
+        self.next_redo_block()?;
         Ok(())
     }
 
@@ -117,7 +117,7 @@ impl RedoFileReader {
         &mut self.options
     }
 
-    pub unsafe fn read_file_header(&mut self) -> Result<(), ReaderError> {
+    pub(crate) fn read_file_header(&mut self) -> Result<(), ReaderError> {
         // 确认block大小
         self.file.seek(std::io::SeekFrom::Start(0))?;
         let mut buffer = [0u8; std::mem::size_of::<FileHeader>()];
@@ -142,13 +142,10 @@ impl RedoFileReader {
 
     fn read_block(&mut self) -> Result<Vec<u8>, ReaderError> {
         let mut buffer = vec![0u8; self.file_header().header.block_size as usize];
-        match self.file.read_exact(&mut buffer) {
-            Err(err) => {
-                if err.kind() == ErrorKind::UnexpectedEof {
-                    return Err(ReaderError::Eof);
-                }
-            }
-            _ => {}
+        if let Err(err) = self.file.read_exact(&mut buffer)
+            && err.kind() == ErrorKind::UnexpectedEof
+        {
+            return Err(ReaderError::Eof);
         };
 
         let (calc_checksum, expected_checksum) = calc_checksum(&mut buffer).unwrap();
@@ -168,14 +165,10 @@ impl RedoFileReader {
         Ok(buffer)
     }
 
-    fn next_redo_block_impl(&mut self) -> Result<(), ReaderError> {
+    pub(crate) fn next_redo_block(&mut self) -> Result<(), ReaderError> {
         self.curr_block = self.read_block()?;
         self.offset_in_block = std::mem::size_of::<RedoBlockHead>();
         Ok(())
-    }
-
-    pub unsafe fn next_redo_block(&mut self) -> Result<(), ReaderError> {
-        self.next_redo_block_impl()
     }
 
     pub fn calc_curr_block_checksum(
@@ -196,7 +189,7 @@ impl RedoFileReader {
             std::mem::size_of::<RedoRecordHeadV1>(),
         );
         if self.file_header().header.block_size as usize - self.offset_in_block < min_size {
-            self.next_redo_block_impl()?;
+            self.next_redo_block()?;
         }
 
         loop {
@@ -234,7 +227,7 @@ impl RedoFileReader {
             }
 
             if record.len == 0 {
-                self.next_redo_block_impl()?;
+                self.next_redo_block()?;
                 continue;
             }
 
@@ -259,7 +252,7 @@ impl RedoFileReader {
                 self.offset_in_block += can_read;
 
                 if self.offset_in_block == self.file_header().header.block_size as usize {
-                    self.next_redo_block_impl()?;
+                    self.next_redo_block()?;
                 }
             }
         } else {
@@ -323,10 +316,10 @@ impl RedoFileReader {
 }
 
 fn padding_size(size: u64, alignment: u64) -> u64 {
-    if size % alignment == 0 {
-        return size;
+    if size.is_multiple_of(alignment) {
+        size
     } else {
-        return size + alignment - (size % alignment);
+        size + alignment - (size % alignment)
     }
 }
 

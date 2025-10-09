@@ -18,7 +18,7 @@ impl Scn {
                 return (self.base as u64) | 0xFFFF_FFFF_0000_0000u64;
             }
 
-            if unsafe { transmute::<_, u64>(self) } == 0xFFFFFFFEFFFFFFFFu64 {
+            if unsafe { transmute::<Scn, u64>(self) } == 0xFFFFFFFEFFFFFFFFu64 {
                 return 0x7FFEFFFFFFFFFFFFu64;
             }
         }

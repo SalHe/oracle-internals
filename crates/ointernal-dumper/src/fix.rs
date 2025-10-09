@@ -1,11 +1,25 @@
-use std::{
-    fs::File,
-    io::{Seek, SeekFrom, Write},
-    path::PathBuf,
-};
+use std::{fs::File, path::PathBuf};
 
-use anyhow::{Context, anyhow};
-use ointernal_parser::oracle::{reader::RedoFileReader, redo::RedoBlockHead};
+use anyhow::Context;
+use colored::Colorize;
+use ointernal_parser::oracle::fixer::{FixOperation, RedoFixer};
+
+fn fix(f: &mut File, block_id: u32, block_size: u32, op: FixOperation) -> anyhow::Result<()> {
+    print!("   ");
+    match op {
+        FixOperation::FixCheckSum { actual, expected } => {
+            print!(
+                "check sum expected=0x{:04x}, actual=0x{:04x}",
+                expected, actual
+            );
+        }
+    }
+
+    op.fix_it(f, block_id, block_size)?;
+    println!(" {}", "(FIXED)".bold());
+
+    Ok(())
+}
 
 pub fn fix_redo(file: PathBuf) -> anyhow::Result<()> {
     let fixed_file = file.with_file_name(format!(
@@ -15,33 +29,19 @@ pub fn fix_redo(file: PathBuf) -> anyhow::Result<()> {
     std::fs::copy(&file, &fixed_file).with_context(|| "failed to create fixed file")?;
 
     let mut f = File::options().write(true).open(&fixed_file)?;
-    let mut reader = RedoFileReader::from_file(&file)?;
-    reader.set_options().ignore_checksum = true;
-    unsafe { reader.read_file_header()? };
+    let mut fixer = RedoFixer::from_file(&file)?;
 
-    let header = reader.file_header();
-    let block_size = header.header.block_size;
-
-    for i_block in 1..=header.header.block_count {
-        unsafe { reader.next_redo_block().map_err(|e| anyhow!("{:?}", e))? };
-        let (actual, expected) = reader
-            .calc_curr_block_checksum()
-            .map_err(|e| anyhow!("{:?}", e))?;
-        print!("block#{i_block}: actual=0x{actual:04x}, expected=0x{expected:04x}");
-
-        if actual != expected {
-            print!(" (NOT EQUAL) ");
-            f.seek(SeekFrom::Start(
-                ((i_block * block_size) as usize + std::mem::offset_of!(RedoBlockHead, checksum))
-                    as u64,
-            ))?;
-            f.write_all(&actual.to_ne_bytes())?;
-
-            print!(" (FIXED) ")
+    while let Some(s) = fixer.next_block()? {
+        print!("{}  ", format!("{}{}", "block#", s.block_id).bold());
+        if s.passed() {
+            println!("check passed");
         } else {
-            print!(" (EQUAL) ")
+            println!();
+            assert!(!s.operations.is_empty());
+            for op in s.operations {
+                fix(&mut f, s.block_id, fixer.block_size().unwrap(), op)?;
+            }
         }
-        println!()
     }
 
     Ok(())
