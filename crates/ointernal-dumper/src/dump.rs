@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use ointernal_parser::oracle::change::{self, Op};
 use ointernal_parser::oracle::redo::MiscFlags;
 use ointernal_parser::oracle::timestamp::DateTime as OracleDateTime;
 use ointernal_parser::oracle::{
@@ -203,8 +204,21 @@ pub fn read_redo(file: PathBuf) -> Result<(), ReaderError> {
                 change.change.op,
             );
 
-            for (i, v) in change.vector.iter().enumerate() {
-                println!("       vector#{i} {}", hex::encode(v));
+            match change.parse() {
+                Ok(Op::SegmentManagement(change::SegmentManagement::BlockFormatRedo(Some(b)))) => {
+                    println!(
+                        "KTSFRBFMT (block format) redo: Segobjd: 0x{:08x} type: {} itls: {} cscn: 0x{:016x}",
+                        b.obj_info.obj,
+                        b.obj_info.type_,
+                        b.obj_info.itls,
+                        b.scn.full_scn()
+                    );
+                }
+                _ => {
+                    for (i, v) in change.vector.iter().enumerate() {
+                        println!("       vector#{i} {}", hex::encode(v));
+                    }
+                }
             }
 
             i_change += 1;

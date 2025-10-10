@@ -1,4 +1,6 @@
 mod cv;
-mod block_clean_out;
+mod layers;
+mod opcode;
 
-pub use cv::ChangeAndVector;
+pub use cv::{ChangeAndVector, ConvertError};
+pub use opcode::*;

@@ -1,7 +1,7 @@
 use bitflags::bitflags;
 use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout};
 
-use crate::oracle::{opcode::Op, scn::Scn, timestamp::OracleTimestamp};
+use crate::oracle::{change::Op, scn::Scn, timestamp::OracleTimestamp};
 
 #[derive(KnownLayout, Immutable, FromBytes, IntoBytes, Debug)]
 #[repr(C)]
@@ -267,7 +267,7 @@ pub struct RedoRecordHeadV1 {
     pub common: RedoRecordHeadCommon,
 }
 
-#[derive(KnownLayout, Immutable, FromBytes, Clone, Copy)]
+#[derive(KnownLayout, Immutable, FromBytes, Clone, Copy, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct DBA(pub u32);
 
@@ -293,7 +293,7 @@ impl std::fmt::Debug for DBA {
     }
 }
 
-#[derive(KnownLayout, Immutable, FromBytes, Debug, Clone, Copy)]
+#[derive(KnownLayout, Immutable, FromBytes, Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(C)]
 pub struct Change {
     pub layer: u8,
@@ -333,7 +333,7 @@ impl Change {
     }
 
     /// Get op of current change, if not recognized, return [None].
-    pub fn op(&self) -> Option<Op> {
+    pub fn op(&'_ self) -> Option<Op<'_>> {
         Op::parse((self.layer, self.op))
     }
 }

@@ -1,5 +1,20 @@
+use std::marker::PhantomData;
+
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::FromPrimitive;
+use thiserror::Error;
+
+use crate::oracle::change::cv::FromCV;
+
+use super::{ChangeAndVector, ConvertError, layers::layer4::BlockFormat};
+
+#[derive(Error, Debug)]
+pub enum OpDataError {
+    #[error("unrecognized op {0}.{1}")]
+    UnrecognizedOp(u8, u8),
+    #[error("{0:?}")]
+    ConvertError(#[from] ConvertError),
+}
 
 macro_rules! codes_for_layer {
     (
@@ -8,18 +23,20 @@ macro_rules! codes_for_layer {
             $layer_name:ident = $layer_code:literal:
                 $(
                     $(#[$op_meta:meta])*
-                    $op_name:ident = $op_code:literal,
+                    $op_name:ident = $op_code:literal $(! $op_data_type:ident)?,
                 )*;
         )+
     ) => {
+        // op code and data enum
         #[derive(Debug, PartialEq, Eq)]
-        pub enum Op {
+        pub enum Op<'a> {
             $(
-                $layer_name($layer_name),
+                #[doc = concat!("Layer: ", stringify!($layer_code), "\n\n")]
+                $layer_name($layer_name<'a>),
             )*
         }
 
-        impl Op {
+        impl Op<'_> {
             pub fn parse(value: (u8, u8)) -> Option<Self> {
                 let (in_layer, in_op) = value;
                 match LayerCode::from_u8(in_layer) {
@@ -33,24 +50,72 @@ macro_rules! codes_for_layer {
             }
         }
 
-
+        // layer code enum
         #[derive(Debug, FromPrimitive, ToPrimitive, PartialEq, Eq)]
-        pub enum LayerCode {
+        enum LayerCode {
             $(
+                $(#[$layer_meta])*
                 $layer_name = $layer_code,
             )*
         }
 
+        // opcode in all layers
         $(
+            #[doc = concat!("Layer: ", stringify!($layer_code), "\n\n")]
             $(#[$layer_meta])*
-            #[derive(Debug, FromPrimitive, ToPrimitive, PartialEq, Eq)]
-            pub enum $layer_name {
+            #[allow(unused_parens)]
+            #[derive(Debug, PartialEq, Eq)]
+            pub enum $layer_name<'a> {
                 $(
+                    #[doc = concat!("OP: ", stringify!($layer_code), ".", stringify!($op_code), "\n\n")]
                     $(#[$op_meta])*
-                    $op_name = $op_code,
+
+                    $op_name(Option<(
+                        $($op_data_type<'a>)?
+                    )>),
                 )*
+                Unknown(&'a PhantomData<()>)
+            }
+
+            impl<'a> FromPrimitive for $layer_name<'a> {
+                fn from_i64(n: i64) -> Option<Self> {
+                    Self::from_u64(n as _)
+                }
+
+                fn from_u64(n: u64) -> Option<Self> {
+                    match n {
+                        $(
+                            $op_code => Some($layer_name::$op_name(None)),
+                        )*
+                        _ => None,
+                    }
+                }
             }
         )*
+
+        // op data parsing
+        impl ChangeAndVector {
+            pub fn parse<'a>(&'a self) -> Result<Op<'a>, OpDataError> {
+                let op = Op::parse((self.change.layer, self.change.op))
+                            .ok_or(OpDataError::UnrecognizedOp(self.change.layer, self.change.op))?;
+                match op {
+                    $(
+                        Op::$layer_name(op_code) => match op_code {
+                            $(
+                                $layer_name::$op_name(_) => {
+                                    $(
+                                        return Ok(Op::$layer_name($layer_name::$op_name(Some(<$op_data_type<'a>>::from_cv(&self)?))));
+                                    )?
+                                    #[allow(unreachable_code)]
+                                    Ok(Op::$layer_name($layer_name::$op_name(None)))
+                                }
+                            )*
+                            $layer_name::Unknown(_) => unreachable!(),
+                        }
+                    )*
+                }
+            }
+        }
     };
 }
 
@@ -266,7 +331,7 @@ codes_for_layer! {
         /// ktsfm redo: -- allocate space ??
         AllocateSpace = 1,
         /// KTSFRBFMT (block format) redo
-        BlockFormatRedo = 5,
+        BlockFormatRedo = 5 !BlockFormat,
         /// (block link modify) (? index) (options: lock clear, lock set)
         BlockLinkModify = 6,
         /// KTSFRGRP (fgb/shdr modify freelist) redo: (options unlink block, move HWM)
@@ -452,7 +517,7 @@ codes_for_layer! {
 mod test {
     use num_traits::FromPrimitive;
 
-    use crate::oracle::opcode::{BlockCleanOut, LayerCode, Op};
+    use crate::oracle::change::opcode::{BlockCleanOut, LayerCode, Op};
 
     #[test]
     fn undefined_layer_code() {
@@ -462,13 +527,13 @@ mod test {
     #[test]
     fn normal_op() {
         assert_eq!(None, Op::parse((1, 2)));
-        assert_eq!(
-            Some(Op::BlockCleanOut(BlockCleanOut::FormatBlock)),
-            Op::parse((4, 5))
-        );
-        assert_eq!(
-            Some(Op::BlockCleanOut(BlockCleanOut::PhysicalCleanOut)),
-            Op::parse((4, 2))
-        );
+        assert!(matches!(
+            Op::parse((4, 5)),
+            Some(Op::BlockCleanOut(BlockCleanOut::FormatBlock(_)))
+        ));
+        assert!(matches!(
+            Op::parse((4, 2)),
+            Some(Op::BlockCleanOut(BlockCleanOut::PhysicalCleanOut(_)))
+        ));
     }
 }

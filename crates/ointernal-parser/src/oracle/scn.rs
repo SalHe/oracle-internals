@@ -2,7 +2,7 @@ use std::mem::transmute;
 
 use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout};
 
-#[derive(KnownLayout, Immutable, FromBytes, IntoBytes, Debug, Clone, Copy)]
+#[derive(KnownLayout, Immutable, FromBytes, IntoBytes, Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(C)]
 pub struct Scn {
     pub base: u32,
@@ -68,7 +68,7 @@ mod test {
                 .full_scn()
         );
     }
-    
+
     #[test]
     fn marker_scn() {
         assert_eq!(
