@@ -214,6 +214,25 @@ pub fn read_redo(file: PathBuf) -> Result<(), ReaderError> {
                         b.scn.full_scn()
                     );
                 }
+                Ok(Op::SegmentManagement(change::SegmentManagement::BlockLinkModify(Some(b)))) => {
+                    println!(
+                        "KTSFRBLNK (block link modify) redo:  Opcode: {}",
+                        match b.data.op_code() {
+                            Some(o) => match o {
+                                change::layers::layer13::BlockLinkModifyOp::LockClear =>
+                                    "LCLR (lock clear)",
+                                change::layers::layer13::BlockLinkModifyOp::LockSet =>
+                                    "LSET (lock set)",
+                                change::layers::layer13::BlockLinkModifyOp::LockWrite =>
+                                    "LWRT (lock write)",
+                                change::layers::layer13::BlockLinkModifyOp::ClearLock =>
+                                    "LCLK (clear lock)",
+                            },
+                            None => "???",
+                        }
+                    );
+                    println!("Next dba: 0x{:08x} itli: {}", b.data.dba.0, b.data.itli);
+                }
                 _ => {
                     for (i, v) in change.vector.iter().enumerate() {
                         println!("       vector#{i} {}", hex::encode(v));

@@ -6,7 +6,7 @@ use thiserror::Error;
 
 use crate::oracle::change::cv::FromCV;
 
-use super::{ChangeAndVector, ConvertError, layers::layer4::BlockFormat};
+use super::{ChangeAndVector, ConvertError, layers};
 
 #[derive(Error, Debug)]
 pub enum OpDataError {
@@ -23,7 +23,7 @@ macro_rules! codes_for_layer {
             $layer_name:ident = $layer_code:literal:
                 $(
                     $(#[$op_meta:meta])*
-                    $op_name:ident = $op_code:literal $(! $op_data_type:ident)?,
+                    $op_name:ident = $op_code:literal $(! $($op_data_type:ident)::*)?,
                 )*;
         )+
     ) => {
@@ -71,7 +71,7 @@ macro_rules! codes_for_layer {
                     $(#[$op_meta])*
 
                     $op_name(Option<(
-                        $($op_data_type<'a>)?
+                        $($($op_data_type)::*<'a>)?
                     )>),
                 )*
                 Unknown(&'a PhantomData<()>)
@@ -104,7 +104,7 @@ macro_rules! codes_for_layer {
                             $(
                                 $layer_name::$op_name(_) => {
                                     $(
-                                        return Ok(Op::$layer_name($layer_name::$op_name(Some(<$op_data_type<'a>>::from_cv(&self)?))));
+                                        return Ok(Op::$layer_name($layer_name::$op_name(Some(<$($op_data_type)::*<'a>>::from_cv(&self)?))));
                                     )?
                                     #[allow(unreachable_code)]
                                     Ok(Op::$layer_name($layer_name::$op_name(None)))
@@ -331,9 +331,9 @@ codes_for_layer! {
         /// ktsfm redo: -- allocate space ??
         AllocateSpace = 1,
         /// KTSFRBFMT (block format) redo
-        BlockFormatRedo = 5 !BlockFormat,
+        BlockFormatRedo = 5 !layers::layer13::BlockFormat,
         /// (block link modify) (? index) (options: lock clear, lock set)
-        BlockLinkModify = 6,
+        BlockLinkModify = 6 !layers::layer13::BlockLinkModify,
         /// KTSFRGRP (fgb/shdr modify freelist) redo: (options unlink block, move HWM)
         FreelistModify = 7,
         /// ktsbbu undo - undo operation on bitmap block
