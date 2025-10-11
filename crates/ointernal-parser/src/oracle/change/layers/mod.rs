@@ -9,7 +9,7 @@ pub struct Xid {
     /// Undo segment number (USN) of transaction
     pub usn: u16,
     /// Undo segment header transaction table slot
-    pub htt_slot: u16,
+    pub slot: u16,
     /// Sequence number (wrap)
     pub sequence: u32,
 }

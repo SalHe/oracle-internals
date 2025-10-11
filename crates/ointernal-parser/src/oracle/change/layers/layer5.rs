@@ -1,8 +1,8 @@
 use zerocopy::{FromBytes, Immutable, KnownLayout};
 
 use crate::oracle::{
-    change::{ConvertError, cv::FromCV},
-    redo::{Pxid, UBA},
+    change::{ConvertError, cv::FromCV, layers::Xid},
+    redo::UBA,
 };
 
 // -----------------------------------------------------------------------------
@@ -19,7 +19,7 @@ pub struct UndoHeaderRedoData {
     pub size: u16,
     pub fbi: u8,
     _unknown_2: [u8; 3],
-    pub pxid: Pxid,
+    pub parent_xid: Xid,
 }
 
 #[derive(Debug, PartialEq, Eq)]

@@ -245,7 +245,7 @@ fn print_segment_management(x: change::SegmentManagement) -> anyhow::Result<bool
                                     "Flag: = {} xid or slot0 ccnt:  0x{:04x}.{:03x}.{:08x} Head:  0x{:08x} Tail:  0x{:08x} ",
                                     data.flag,
                                     data.xid.usn,
-                                    data.xid.htt_slot,
+                                    data.xid.slot,
                                     data.xid.sequence,
                                     data.head,
                                     data.tail,
@@ -276,9 +276,9 @@ fn print_tx_undo_management(x: change::TransactionUndoManagement) -> anyhow::Res
                 b.data.uba.dba.0,
                 b.data.uba.seq,
                 b.data.uba.record,
-                b.data.pxid.p1,
-                b.data.pxid.p1,
-                b.data.pxid.p3,
+                b.data.parent_xid.usn,
+                b.data.parent_xid.slot,
+                b.data.parent_xid.sequence,
                 b.pdbuid,
             );
         }
