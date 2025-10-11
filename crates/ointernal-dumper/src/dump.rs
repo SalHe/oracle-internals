@@ -178,23 +178,10 @@ fn print_record_head(i: usize, rba: RBA, head: &RedoRecordHeadCommon, ts: Oracle
     );
 }
 
-fn print_change(i: usize, change: &ChangeAndVector) -> anyhow::Result<()> {
-    println!(
-        "{} CON_ID:? TYP:{} CLS:{} AFN:{} DBA:{:08x} OBJ:{} SCN:0x{:016x} SEQ:{} OP:{}.{} ENC:? RBL:? FLG:0x????",
-        format!("CHANGE #{i} ").green(),
-        change.change.type_,
-        change.change.block_class,
-        change.change.file_number,
-        change.change.dba.0,
-        change.change.obj(),
-        change.change.scn.full_scn(),
-        change.change.seq,
-        change.change.layer,
-        change.change.op,
-    );
-
-    match change.parse() {
-        Ok(Op::SegmentManagement(change::SegmentManagement::BlockFormatRedo(Some(b)))) => {
+fn print_segment_management(x: change::SegmentManagement) -> anyhow::Result<bool> {
+    use change::SegmentManagement as X;
+    match x {
+        X::BlockFormatRedo(Some(b)) => {
             println!(
                 "KTSFRBFMT (block format) redo: Segobjd: 0x{:08x} type: {} itls: {} cscn: 0x{:016x}",
                 b.obj_info.obj,
@@ -203,7 +190,7 @@ fn print_change(i: usize, change: &ChangeAndVector) -> anyhow::Result<()> {
                 b.scn.full_scn()
             );
         }
-        Ok(Op::SegmentManagement(change::SegmentManagement::BlockLinkModify(Some(b)))) => {
+        X::BlockLinkModify(Some(b)) => {
             println!(
                 "KTSFRBLNK (block link modify) redo:  Opcode: {}",
                 match b.data.op_code() {
@@ -221,7 +208,7 @@ fn print_change(i: usize, change: &ChangeAndVector) -> anyhow::Result<()> {
             );
             println!("Next dba: 0x{:08x} itli: {}", b.data.dba.0, b.data.itli);
         }
-        Ok(Op::SegmentManagement(change::SegmentManagement::FreelistModify(Some(b)))) => {
+        X::FreelistModify(Some(b)) => {
             println!("KTSFRGRP (fgb/shdr modify freelist) redo:");
             for one in b.modifies {
                 match one.data()? {
@@ -270,9 +257,16 @@ fn print_change(i: usize, change: &ChangeAndVector) -> anyhow::Result<()> {
                 }
             }
         }
-        Ok(Op::TransactionUndoManagement(change::TransactionUndoManagement::UndoHeaderRedo(
-            Some(b),
-        ))) => {
+        _ => return Ok(false),
+    }
+
+    Ok(true)
+}
+
+fn print_tx_undo_management(x: change::TransactionUndoManagement) -> anyhow::Result<bool> {
+    use change::TransactionUndoManagement as X;
+    match x {
+        X::UndoHeaderRedo(Some(b)) => {
             println!(
                 "ktudh redo: slt: 0x{:04x} sqn: 0x{:08x} flg: 0x{:04x} siz: {} fbi: {}",
                 b.data.slt, b.data.sqn, b.data.flag, b.data.size, b.data.fbi,
@@ -288,13 +282,39 @@ fn print_change(i: usize, change: &ChangeAndVector) -> anyhow::Result<()> {
                 b.pdbuid,
             );
         }
+        _ => return Ok(false),
+    }
+
+    Ok(true)
+}
+
+fn print_change(i: usize, change: &ChangeAndVector) -> anyhow::Result<()> {
+    println!(
+        "{} CON_ID:? TYP:{} CLS:{} AFN:{} DBA:{:08x} OBJ:{} SCN:0x{:016x} SEQ:{} OP:{}.{} ENC:? RBL:? FLG:0x????",
+        format!("CHANGE #{i} ").green(),
+        change.change.type_,
+        change.change.block_class,
+        change.change.file_number,
+        change.change.dba.0,
+        change.change.obj(),
+        change.change.scn.full_scn(),
+        change.change.seq,
+        change.change.layer,
+        change.change.op,
+    );
+
+    let printed = match change.parse() {
+        Ok(Op::SegmentManagement(x)) => print_segment_management(x)?,
+        Ok(Op::TransactionUndoManagement(x)) => print_tx_undo_management(x)?,
         Err(e) => Err(e)?,
-        _ => {
-            for (i, v) in change.vector.iter().enumerate() {
-                println!("       vector#{i} {}", hex::encode(v));
-            }
-        }
+        _ => false,
     };
+
+    if !printed {
+        for (i, v) in change.vector.iter().enumerate() {
+            println!("       vector#{i} {}", hex::encode(v));
+        }
+    }
 
     Ok(())
 }
