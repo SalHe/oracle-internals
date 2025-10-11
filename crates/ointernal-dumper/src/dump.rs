@@ -288,10 +288,15 @@ fn print_tx_undo_management(x: change::TransactionUndoManagement) -> anyhow::Res
     Ok(true)
 }
 
-fn print_change(i: usize, change: &ChangeAndVector) -> anyhow::Result<()> {
+fn print_change(
+    i: usize,
+    force_print_vector: bool,
+    change: &ChangeAndVector,
+) -> anyhow::Result<()> {
     println!(
-        "{} CON_ID:? TYP:{} CLS:{} AFN:{} DBA:{:08x} OBJ:{} SCN:0x{:016x} SEQ:{} OP:{}.{} ENC:? RBL:? FLG:0x????",
+        "{} CON_ID:{} TYP:{} CLS:{} AFN:{} DBA:{:08x} OBJ:{} SCN:0x{:016x} SEQ:{} OP:{}.{} ENC:? RBL:? FLG:0x{:04x}",
         format!("CHANGE #{i} ").green(),
+        change.change.cont_id,
         change.change.type_,
         change.change.block_class,
         change.change.file_number,
@@ -301,6 +306,7 @@ fn print_change(i: usize, change: &ChangeAndVector) -> anyhow::Result<()> {
         change.change.seq,
         change.change.layer,
         change.change.op,
+        change.change.flags,
     );
 
     let printed = match change.parse() {
@@ -310,9 +316,13 @@ fn print_change(i: usize, change: &ChangeAndVector) -> anyhow::Result<()> {
         _ => false,
     };
 
-    if !printed {
+    if !printed || force_print_vector {
         for (i, v) in change.vector.iter().enumerate() {
-            println!("       vector#{i} {}", hex::encode(v));
+            println!(
+                " {} {}",
+                format!("vector#{i}").underline(),
+                hex::encode(v)
+            );
         }
     }
 
@@ -331,7 +341,7 @@ macro_rules! eof_return_ok {
     }};
 }
 
-pub fn read_redo(file: PathBuf) -> anyhow::Result<()> {
+pub fn read_redo(file: PathBuf, force_print_vector: bool) -> anyhow::Result<()> {
     println!("DUMP OF REDO FROM FILE {file:?}");
     print_example_infos();
 
@@ -353,7 +363,7 @@ pub fn read_redo(file: PathBuf) -> anyhow::Result<()> {
         let mut i_change = 1usize;
 
         while let Some(change) = eof_return_ok!(reader.read_change())? {
-            print_change(i_change, &change)?;
+            print_change(i_change, force_print_vector, &change)?;
             i_change += 1;
         }
         i_record += 1;

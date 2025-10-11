@@ -17,7 +17,11 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// dump redo file
-    Dump { redo: PathBuf },
+    Dump {
+        redo: PathBuf,
+        #[arg(short, long, default_value = "false")]
+        force_vector: bool,
+    },
 
     /// fix checksum of redo file(to modify redo file and dump it using Oracle Database)
     Fix { redo: PathBuf },
@@ -27,7 +31,7 @@ fn main() -> anyhow::Result<()> {
     let args = Cli::parse();
 
     match args.command {
-        Commands::Dump { redo } => read_redo(redo),
+        Commands::Dump { redo, force_vector } => read_redo(redo, force_vector),
         Commands::Fix { redo } => {
             fix_redo(redo)?;
             Ok(())

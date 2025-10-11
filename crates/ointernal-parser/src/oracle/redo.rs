@@ -319,7 +319,12 @@ pub struct Change {
     pub seq: u8,
     pub type_: u8,
     pub obj_low: u16,
-    _unknown_1: [u8; 8],
+    pub cont_id: u16,
+
+    /// TODO clarify?
+    /// 0x200 -> `Missing endian conversion callback. Raw dump only.`
+    pub flags: u16,
+    _unknown_1: [u8; 4],
     pub change_list_len: u16,
     pub first_vector_size: u16,
     // rest change vector
