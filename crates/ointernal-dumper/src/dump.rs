@@ -1,11 +1,13 @@
 use std::path::PathBuf;
 
-use ointernal_parser::oracle::change::{self, Op};
+use colored::Colorize;
+use ointernal_parser::oracle::change::{self, ChangeAndVector, Op};
+use ointernal_parser::oracle::reader::ReaderError;
 use ointernal_parser::oracle::redo::MiscFlags;
 use ointernal_parser::oracle::timestamp::DateTime as OracleDateTime;
 use ointernal_parser::oracle::{
     file::FileHeaderBlock,
-    reader::{RBA, ReaderError, Record, RedoFileReader},
+    reader::{RBA, Record, RedoFileReader},
     redo::{RedoFileHead, RedoRecordHeadCommon},
     timestamp::OracleTimestamp,
 };
@@ -153,10 +155,16 @@ fn print_header_info(fh: &FileHeaderBlock, rh: &RedoFileHead) {
     println!();
 }
 
-fn print_record_head(i_record: usize, rba: RBA, head: &RedoRecordHeadCommon, ts: OracleTimestamp) {
+fn print_record_head(i: usize, rba: RBA, head: &RedoRecordHeadCommon, ts: OracleTimestamp) {
     println!(
-        "REDO RECORD#{i_record} - Thread: 1 RBA: 0x{:06x}.{:08x}.{:04x} LEN: 0x{:04x} VLD: 0x{:02x} CON_UID: {}",
-        rba.seq, rba.block_id, rba.offset, head.len, head.vld, head.con_uid,
+        "{} - Thread: 1 RBA: 0x{:06x}.{:08x}.{:04x} LEN: 0x{:04x} VLD: 0x{:02x} CON_UID: {}",
+        format!("REDO RECORD#{i}").bold().green(),
+        rba.seq,
+        rba.block_id,
+        rba.offset,
+        head.len,
+        head.vld,
+        head.con_uid,
     );
     println!(
         "SCN: 0x{:016x} SUBSCN:  {} {}",
@@ -170,7 +178,121 @@ fn print_record_head(i_record: usize, rba: RBA, head: &RedoRecordHeadCommon, ts:
     );
 }
 
-pub fn read_redo(file: PathBuf) -> Result<(), ReaderError> {
+fn print_change(i: usize, change: &ChangeAndVector) -> anyhow::Result<()> {
+    println!(
+        "{} CON_ID:? TYP:{} CLS:{} AFN:{} DBA:{:08x} OBJ:{} SCN:0x{:016x} SEQ:{} OP:{}.{} ENC:? RBL:? FLG:0x????",
+        format!("CHANGE #{i} ").green(),
+        change.change.type_,
+        change.change.block_class,
+        change.change.file_number,
+        change.change.dba.0,
+        change.change.obj(),
+        change.change.scn.full_scn(),
+        change.change.seq,
+        change.change.layer,
+        change.change.op,
+    );
+
+    match change.parse() {
+        Ok(Op::SegmentManagement(change::SegmentManagement::BlockFormatRedo(Some(b)))) => {
+            println!(
+                "KTSFRBFMT (block format) redo: Segobjd: 0x{:08x} type: {} itls: {} cscn: 0x{:016x}",
+                b.obj_info.obj,
+                b.obj_info.type_,
+                b.obj_info.itls,
+                b.scn.full_scn()
+            );
+        }
+        Ok(Op::SegmentManagement(change::SegmentManagement::BlockLinkModify(Some(b)))) => {
+            println!(
+                "KTSFRBLNK (block link modify) redo:  Opcode: {}",
+                match b.data.op_code() {
+                    Some(o) => match o {
+                        change::layers::layer13::BlockLinkModifyOp::LockClear =>
+                            "LCLR (lock clear)",
+                        change::layers::layer13::BlockLinkModifyOp::LockSet => "LSET (lock set)",
+                        change::layers::layer13::BlockLinkModifyOp::LockWrite =>
+                            "LWRT (lock write)",
+                        change::layers::layer13::BlockLinkModifyOp::ClearLock =>
+                            "LCLK (clear lock)",
+                    },
+                    None => "???",
+                }
+            );
+            println!("Next dba: 0x{:08x} itli: {}", b.data.dba.0, b.data.itli);
+        }
+        Ok(Op::SegmentManagement(change::SegmentManagement::FreelistModify(Some(b)))) => {
+            println!("KTSFRGRP (fgb/shdr modify freelist) redo:");
+            for one in b.modifies {
+                match one.data()? {
+                    Some((op, data)) => {
+                        println!(
+                            " Opcode: {}",
+                            match op {
+                                change::layers::layer13::FreelistModifyBaseOp::MoveHwm =>
+                                    "HWMMV (move hwm)",
+                                change::layers::layer13::FreelistModifyBaseOp::ListNew =>
+                                    "LNEW (list new)",
+                                change::layers::layer13::FreelistModifyBaseOp::LinkBlock =>
+                                    "LUPD_LBLK (link block)",
+                                change::layers::layer13::FreelistModifyBaseOp::UnlinkBlock =>
+                                    "LUPD_UNLBLK (unlink block)",
+                                change::layers::layer13::FreelistModifyBaseOp::LinkList =>
+                                    "LUPD_LLIST (link a list)",
+                                change::layers::layer13::FreelistModifyBaseOp::UnlinkList =>
+                                    "LUPD_UNLIST (unlink a list)",
+                                change::layers::layer13::FreelistModifyBaseOp::SegListsCopy =>
+                                    "GSET_SEGLIST (seg lists copy)",
+                                change::layers::layer13::FreelistModifyBaseOp::XNTListsCopy =>
+                                    "GSET_XNTLIST (xnt lists copy)",
+                            }
+                        );
+
+                        match data {
+                            change::layers::layer13::FreelistModifyDataBody::MoveHwm { nbk } => {
+                                println!("NBK: {nbk}")
+                            }
+                            change::layers::layer13::FreelistModifyDataBody::Other(data) => {
+                                println!("Slot no: {}, Count: {}", data.slot_no, data.slot_count);
+                                println!(
+                                    "Flag: = {} xid or slot0 ccnt:  0x{:04x}.{:03x}.{:08x} Head:  0x{:08x} Tail:  0x{:08x} ",
+                                    data.flag,
+                                    data.xid.usn,
+                                    data.xid.htt_slot,
+                                    data.xid.sequence,
+                                    data.head,
+                                    data.tail,
+                                );
+                            }
+                        }
+                    }
+                    None => println!(" Opcode: ???"),
+                }
+            }
+        }
+        _ => {
+            for (i, v) in change.vector.iter().enumerate() {
+                println!("       vector#{i} {}", hex::encode(v));
+            }
+        }
+    };
+
+    Ok(())
+}
+
+macro_rules! eof_return_ok {
+    ($e:expr) => {{
+        let r = $e;
+        if let Err(ReaderError::Eof) = r {
+            println!("END OF REDO DUMP");
+            return Ok(());
+        }
+
+        r
+    }};
+}
+
+pub fn read_redo(file: PathBuf) -> anyhow::Result<()> {
     println!("DUMP OF REDO FROM FILE {file:?}");
     print_example_infos();
 
@@ -182,7 +304,7 @@ pub fn read_redo(file: PathBuf) -> Result<(), ReaderError> {
     print_header_info(file_header, redo_file_header);
 
     let mut i_record = 1usize;
-    while let Some((rba, record)) = reader.begin_read_record()? {
+    while let Some((rba, record)) = eof_return_ok!(reader.begin_read_record())? {
         println!();
         match record {
             Record::V1(v1) => print_record_head(i_record, rba, &v1.common, OracleTimestamp(0)),
@@ -190,56 +312,9 @@ pub fn read_redo(file: PathBuf) -> Result<(), ReaderError> {
         }
 
         let mut i_change = 1usize;
-        while let Some(change) = reader.read_change()? {
-            println!(
-                "CHANGE #{i_change} CON_ID:? TYP:{} CLS:{} AFN:{} DBA:{:08x} OBJ:{} SCN:0x{:016x} SEQ:{} OP:{}.{} ENC:? RBL:? FLG:0x????",
-                change.change.type_,
-                change.change.block_class,
-                change.change.file_number,
-                change.change.dba.0,
-                change.change.obj(),
-                change.change.scn.full_scn(),
-                change.change.seq,
-                change.change.layer,
-                change.change.op,
-            );
 
-            match change.parse() {
-                Ok(Op::SegmentManagement(change::SegmentManagement::BlockFormatRedo(Some(b)))) => {
-                    println!(
-                        "KTSFRBFMT (block format) redo: Segobjd: 0x{:08x} type: {} itls: {} cscn: 0x{:016x}",
-                        b.obj_info.obj,
-                        b.obj_info.type_,
-                        b.obj_info.itls,
-                        b.scn.full_scn()
-                    );
-                }
-                Ok(Op::SegmentManagement(change::SegmentManagement::BlockLinkModify(Some(b)))) => {
-                    println!(
-                        "KTSFRBLNK (block link modify) redo:  Opcode: {}",
-                        match b.data.op_code() {
-                            Some(o) => match o {
-                                change::layers::layer13::BlockLinkModifyOp::LockClear =>
-                                    "LCLR (lock clear)",
-                                change::layers::layer13::BlockLinkModifyOp::LockSet =>
-                                    "LSET (lock set)",
-                                change::layers::layer13::BlockLinkModifyOp::LockWrite =>
-                                    "LWRT (lock write)",
-                                change::layers::layer13::BlockLinkModifyOp::ClearLock =>
-                                    "LCLK (clear lock)",
-                            },
-                            None => "???",
-                        }
-                    );
-                    println!("Next dba: 0x{:08x} itli: {}", b.data.dba.0, b.data.itli);
-                }
-                _ => {
-                    for (i, v) in change.vector.iter().enumerate() {
-                        println!("       vector#{i} {}", hex::encode(v));
-                    }
-                }
-            }
-
+        while let Some(change) = eof_return_ok!(reader.read_change())? {
+            print_change(i_change, &change)?;
             i_change += 1;
         }
         i_record += 1;

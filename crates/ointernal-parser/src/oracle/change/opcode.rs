@@ -335,7 +335,7 @@ codes_for_layer! {
         /// (block link modify) (? index) (options: lock clear, lock set)
         BlockLinkModify = 6 !layers::layer13::BlockLinkModify,
         /// KTSFRGRP (fgb/shdr modify freelist) redo: (options unlink block, move HWM)
-        FreelistModify = 7,
+        FreelistModify = 7 !layers::layer13::FreelistModify,
         /// ktsbbu undo - undo operation on bitmap block
         BitmapBlockUndo1 = 13,
         /// ktsbbu undo - undo operation on bitmap block
