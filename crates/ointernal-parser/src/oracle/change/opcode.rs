@@ -151,7 +151,7 @@ codes_for_layer! {
         /// ktudb redo (undo block redo)
         UndoBlockRedo = 1,
         /// ktudh redo (undo header redo)
-        UndoHeaderRedo = 2,
+        UndoHeaderRedo = 2 !layers::layer5::UndoHeaderRedo,
         /// Rollout a transaction begin
         RolloutTxBegin = 3,
         /// ktucm redo (change transaction slot state (commit/rollback))

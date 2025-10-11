@@ -267,6 +267,25 @@ pub struct RedoRecordHeadV1 {
     pub common: RedoRecordHeadCommon,
 }
 
+#[derive(KnownLayout, Immutable, FromBytes, Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(C)]
+pub struct Pxid {
+    pub p1: u16,
+    pub p2: u16,
+    pub p3: u32,
+}
+
+/// Undo Block Address
+#[derive(KnownLayout, Immutable, FromBytes, Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(C)]
+pub struct UBA {
+    pub dba: DBA,
+    pub seq: u16,
+    pub record: u8,
+    _unknown: u8,
+}
+
+/// Data Block Address
 #[derive(KnownLayout, Immutable, FromBytes, Clone, Copy, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct DBA(pub u32);

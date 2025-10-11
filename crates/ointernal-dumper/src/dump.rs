@@ -270,6 +270,25 @@ fn print_change(i: usize, change: &ChangeAndVector) -> anyhow::Result<()> {
                 }
             }
         }
+        Ok(Op::TransactionUndoManagement(change::TransactionUndoManagement::UndoHeaderRedo(
+            Some(b),
+        ))) => {
+            println!(
+                "ktudh redo: slt: 0x{:04x} sqn: 0x{:08x} flg: 0x{:04x} siz: {} fbi: {}",
+                b.data.slt, b.data.sqn, b.data.flag, b.data.size, b.data.fbi,
+            );
+            println!(
+                "            uba: 0x{:08x}.{:04x}.{:02x}    pxid:  0x{:04x}.{:03x}.{:08x}        pdbuid:{}",
+                b.data.uba.dba.0,
+                b.data.uba.seq,
+                b.data.uba.record,
+                b.data.pxid.p1,
+                b.data.pxid.p1,
+                b.data.pxid.p3,
+                b.pdbuid,
+            );
+        }
+        Err(e) => Err(e)?,
         _ => {
             for (i, v) in change.vector.iter().enumerate() {
                 println!("       vector#{i} {}", hex::encode(v));
