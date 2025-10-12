@@ -282,6 +282,25 @@ fn print_tx_undo_management(x: change::TransactionUndoManagement) -> anyhow::Res
                 b.pdbuid,
             );
         }
+        X::ChangeTxSlotStatus(Some(b)) => {
+            print!(
+                "ktucm redo: slt: 0x{:04x} sqn: 0x{:08x} srt: {} sta: {} flg: 0x{:x}",
+                b.data.slot, b.data.seq, b.data.srt, b.data.sta, b.data.flags,
+            );
+
+            if let Some(d) = b.data2 {
+                print!(
+                    " ktucf redo: uba: 0x{:08x}.{:04x}.{:02x} ext: {} spc: {} fbi: {} ",
+                    d.uba.dba.0, d.uba.seq, d.uba.seq, d.ext, d.spc, d.fbi
+                );
+            }
+
+            if let Some(d) = b.scn {
+                print!("\nscn:  0x{:016x}", d.full_scn());
+            }
+
+            println!();
+        }
         _ => return Ok(false),
     }
 
@@ -320,7 +339,7 @@ fn print_change(
         for (i, v) in change.vector.iter().enumerate() {
             println!(
                 " {} {}",
-                format!("vector#{i}").underline(),
+                format!("vector#{i}[{}]", v.len()).underline(),
                 hex::encode(v)
             );
         }

@@ -15,3 +15,4 @@
 因为项目本身的性质，所以可能无法解释文件中的某些信息，在注释中将使用一些标记进行说明，因为不希望大段的话总是在注释中重复出现，所以使用缩写进行标记(使用`#{}`包裹起来)：
 
 - AMND(After modified, and dump it, no any difference.): 将二进制文件修改后，重新dump，未发现结果变化（无法通过此方法确认字节的含义）
+- AME(After modified, and dump it, error occurred.): 将二进制文件修改后，重新dump，数据库报错（修改的内容以及错误会具体进行说明）

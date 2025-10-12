@@ -155,7 +155,7 @@ codes_for_layer! {
         /// Rollout a transaction begin
         RolloutTxBegin = 3,
         /// ktucm redo (change transaction slot state (commit/rollback))
-        ChangeTxSlotStatus = 4,
+        ChangeTxSlotStatus = 4 !layers::layer5::ChangeTxSlotStatus,
         /// Create rollback segment
         CreateRollbackSeg = 5,
         /// ktubu redo: mark undo record "user undo done"
