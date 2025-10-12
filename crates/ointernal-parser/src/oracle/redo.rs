@@ -199,6 +199,7 @@ impl MiscFlags {
 }
 
 bitflags! {
+    #[derive(Debug)]
     pub struct VldFlags: u8 {
         const KCRVALID = 0x01;
         const KCRDEPND = 0x02;

@@ -6,6 +6,7 @@ use std::{
 };
 
 use thiserror::Error;
+use tracing::trace;
 use zerocopy::{CastError, FromBytes};
 
 use crate::oracle::{
@@ -118,12 +119,21 @@ impl RedoFileReader {
         &mut self.options
     }
 
+    #[tracing::instrument(skip(self))]
     pub(crate) fn read_file_header(&mut self) -> Result<(), ReaderError> {
         // 确认block大小
         self.file.seek(std::io::SeekFrom::Start(0))?;
         let mut buffer = [0u8; std::mem::size_of::<FileHeader>()];
         self.file.read_exact(&mut buffer)?;
+
         let header = FileHeader::ref_from_bytes(&buffer).unwrap();
+        trace!(header.block_size, header.block_count, "file header is read",);
+
+        trace!(
+            expected = FileHeader::MAGIC_NUMBER,
+            actual = header.magic_number,
+            "magic number"
+        );
         if header.magic_number != FileHeader::MAGIC_NUMBER {
             return Err(ReaderError::InvalidFileMagicNumber);
         }
@@ -141,6 +151,7 @@ impl RedoFileReader {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self))]
     fn read_block(&mut self) -> Result<Vec<u8>, ReaderError> {
         let mut buffer = vec![0u8; self.file_header().header.block_size as usize];
         if let Err(err) = self.file.read_exact(&mut buffer)
@@ -151,6 +162,13 @@ impl RedoFileReader {
 
         let (calc_checksum, expected_checksum) = calc_checksum(&mut buffer).unwrap();
         let (head, _) = RedoBlockHead::ref_from_prefix(&buffer).unwrap();
+        trace!(
+            head.id,
+            calc_checksum,
+            expected_checksum,
+            matched = calc_checksum == expected_checksum
+        );
+
         if calc_checksum != expected_checksum && !self.options.ignore_checksum {
             return Err(ReaderError::InvalidChecksum {
                 block_id: head.id,
@@ -178,6 +196,7 @@ impl RedoFileReader {
         calc_checksum(&mut self.curr_block)
     }
 
+    #[tracing::instrument(skip(self))]
     pub fn begin_read_record(&mut self) -> Result<Option<(RBA, Record)>, ReaderError> {
         if self.in_record {
             return Err(ReaderError::AlreadyInRecord);
@@ -187,7 +206,7 @@ impl RedoFileReader {
 
         let min_size = min(
             std::mem::size_of::<RedoRecordHeadV1>(),
-            std::mem::size_of::<RedoRecordHeadV1>(),
+            std::mem::size_of::<RedoRecordHeadV2>(),
         );
         if self.file_header().header.block_size as usize - self.offset_in_block < min_size {
             self.next_redo_block()?;
@@ -206,7 +225,9 @@ impl RedoFileReader {
                 offset: self.offset_in_block as _,
             };
 
-            let vld = VldFlags::from_bits(record.vld).unwrap();
+            let flags = VldFlags::from_bits(record.vld).unwrap();
+            trace!(?flags);
+            let vld = flags;
             if vld.contains(VldFlags::KCRVOID) {
                 let v2 = RedoRecordHeadV2::ref_from_bytes(
                     &self.curr_block[self.offset_in_block
@@ -228,6 +249,7 @@ impl RedoFileReader {
             }
 
             if record.len == 0 {
+                trace!("current record len is 0, skip and read next block");
                 self.next_redo_block()?;
                 continue;
             }
@@ -236,16 +258,27 @@ impl RedoFileReader {
         }
     }
 
+    #[tracing::instrument(skip(self, target))]
     pub fn read_content(&mut self, target: &mut [u8]) -> Result<(), ReaderError> {
         self.curr_record.ok_or(ReaderError::NotReadingRecord)?;
+
         let expected_size = target.len();
-        if self.offset_in_block + expected_size >= self.file_header().header.block_size as usize {
+        let block_crossed =
+            self.offset_in_block + expected_size >= self.file_header().header.block_size as usize;
+        trace!(expected_size, block_crossed, "begin read vector content");
+
+        if block_crossed {
             let mut rest = expected_size;
             while rest > 0 {
                 let can_read = min(
                     self.file_header().header.block_size as usize - self.offset_in_block,
                     rest,
                 );
+                trace!(
+                    self.content_offset,
+                    self.offset_in_block, can_read, "read slice of vector content"
+                );
+
                 target[(expected_size - rest)..(expected_size - rest + can_read)].copy_from_slice(
                     &self.curr_block[self.offset_in_block..(self.offset_in_block + can_read)],
                 );
@@ -257,6 +290,12 @@ impl RedoFileReader {
                 }
             }
         } else {
+            trace!(
+                self.content_offset,
+                self.offset_in_block,
+                can_read = expected_size,
+                "read all vector content"
+            );
             target.copy_from_slice(
                 &self.curr_block[self.offset_in_block..(self.offset_in_block + expected_size)],
             );
@@ -267,6 +306,7 @@ impl RedoFileReader {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self))]
     pub fn read_change(&mut self) -> Result<Option<ChangeAndVector>, ReaderError> {
         if !self.in_record {
             return Err(ReaderError::NotReadingRecord);
@@ -278,6 +318,7 @@ impl RedoFileReader {
         };
 
         if self.content_offset >= len as usize {
+            trace!(self.content_offset, len, "no more changes");
             self.in_record = false;
             return Ok(None);
         }
@@ -291,15 +332,19 @@ impl RedoFileReader {
             vector_size.push(change.first_vector_size);
         }
 
-        for _ in 1..change.vector_count() {
+        for i in 1..change.vector_count() {
+            trace!(vector_id = i - 1, "reading vector data");
             let mut buffer = [0u8; 2];
             self.read_content(&mut buffer)?;
             vector_size.push(u16::from_le_bytes(buffer));
         }
+        trace!(?vector_size);
 
         if change.need_padding() {
             self.content_offset += 2;
             self.offset_in_block += 2;
+            trace!("padding 2 bytes for change list");
+            trace!(self.content_offset, self.offset_in_block);
         }
 
         let mut vector_data = Vec::with_capacity(change.vector_count() as usize);

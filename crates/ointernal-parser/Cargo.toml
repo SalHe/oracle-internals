@@ -8,4 +8,5 @@ bitflags = "2.9.4"
 num-derive = "0.4.2"
 num-traits = "0.2.19"
 thiserror = "2.0.17"
+tracing = "0.1.41"
 zerocopy = { version = "0.8.27", features = ["derive"] }

@@ -4,6 +4,7 @@ mod fix;
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
+use tracing_subscriber::EnvFilter;
 
 use crate::{dump::read_redo, fix::fix_redo};
 
@@ -28,6 +29,11 @@ enum Commands {
 }
 
 fn main() -> anyhow::Result<()> {
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from_default_env())
+        .with_writer(std::io::stderr)
+        .init();
+
     let args = Cli::parse();
 
     match args.command {
