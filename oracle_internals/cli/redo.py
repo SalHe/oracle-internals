@@ -18,7 +18,7 @@ def get_redo_path(redo):
 def list_redo_files(args):
     container = must_get_container()
     path = '/opt/oracle/oradata/ORCLINTERNAL/archive_logs/'
-    result = container.exec_run(['ls', '-lh', path])
+    result = container.exec_run(['ls', '-lhtr', path])
     print(result.output.decode())
 
 

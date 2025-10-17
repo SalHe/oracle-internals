@@ -27,13 +27,6 @@ def main():
     parser_collect.add_argument(
         'pytest_args', nargs=argparse.REMAINDER, help='传递给 pytest 的参数')
 
-    parser_report = subparsers.add_parser('report', help='启动 Allure 报告服务')
-    parser_report.set_defaults(func=testing.open_report)
-    parser_report.add_argument(
-        '--host', default='127.0.0.1', help='监听地址，默认所有地址')
-    parser_report.add_argument(
-        '--port', type=int, default=2992, help='监听端口')
-
     parser_redo = subparsers.add_parser('redo', help='redo 文件相关操作')
     redo_subparsers = parser_redo.add_subparsers(
         dest='redo_command', required=True)
