@@ -28,7 +28,7 @@ macro_rules! codes_for_layer {
         )+
     ) => {
         // op code and data enum
-        #[derive(Debug, PartialEq, Eq)]
+        #[derive(Debug)]
         pub enum Op<'a> {
             $(
                 #[doc = concat!("Layer: ", stringify!($layer_code), "\n\n")]
@@ -64,7 +64,7 @@ macro_rules! codes_for_layer {
             #[doc = concat!("Layer: ", stringify!($layer_code), "\n\n")]
             $(#[$layer_meta])*
             #[allow(unused_parens)]
-            #[derive(Debug, PartialEq, Eq)]
+            #[derive(Debug)]
             pub enum $layer_name<'a> {
                 $(
                     #[doc = concat!("OP: ", stringify!($layer_code), ".", stringify!($op_code), "\n\n")]
@@ -272,7 +272,7 @@ codes_for_layer! {
         /// undo row operation
         UndoRowOperation = 1,
         /// IRP insert row piece
-        InsertRowPiece = 2,
+        InsertRowPiece = 2 !layers::layer11::InsertRowPiece,
         /// DRP delete row piece
         DeleteRowPiece = 3,
         /// lock row piece
@@ -526,7 +526,7 @@ mod test {
 
     #[test]
     fn normal_op() {
-        assert_eq!(None, Op::parse((1, 2)));
+        assert!(matches!(Op::parse((1, 2)), None));
         assert!(matches!(
             Op::parse((4, 5)),
             Some(Op::BlockCleanOut(BlockCleanOut::FormatBlock(_)))

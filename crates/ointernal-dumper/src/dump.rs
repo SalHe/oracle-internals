@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use colored::Colorize;
+use num_traits::FromPrimitive;
 use ointernal_parser::oracle::change::{self, ChangeAndVector, Op};
 use ointernal_parser::oracle::reader::ReaderError;
 use ointernal_parser::oracle::redo::MiscFlags;
@@ -189,6 +190,7 @@ fn print_segment_management(x: change::SegmentManagement) -> anyhow::Result<bool
                 b.obj_info.itls,
                 b.scn.full_scn()
             );
+            Ok(true)
         }
         X::BlockLinkModify(Some(b)) => {
             println!(
@@ -207,6 +209,7 @@ fn print_segment_management(x: change::SegmentManagement) -> anyhow::Result<bool
                 }
             );
             println!("Next dba: 0x{:08x} itli: {}", b.data.dba.0, b.data.itli);
+            Ok(true)
         }
         X::FreelistModify(Some(b)) => {
             println!("KTSFRGRP (fgb/shdr modify freelist) redo:");
@@ -256,11 +259,10 @@ fn print_segment_management(x: change::SegmentManagement) -> anyhow::Result<bool
                     None => println!(" Opcode: ???"),
                 }
             }
+            Ok(true)
         }
         _ => return Ok(false),
     }
-
-    Ok(true)
 }
 
 fn print_tx_undo_management(x: change::TransactionUndoManagement) -> anyhow::Result<bool> {
@@ -281,6 +283,7 @@ fn print_tx_undo_management(x: change::TransactionUndoManagement) -> anyhow::Res
                 b.data.parent_xid.sequence,
                 b.pdbuid,
             );
+            Ok(true)
         }
         X::ChangeTxSlotStatus(Some(b)) => {
             print!(
@@ -300,11 +303,151 @@ fn print_tx_undo_management(x: change::TransactionUndoManagement) -> anyhow::Res
             }
 
             println!();
+            Ok(true)
         }
         _ => return Ok(false),
     }
+}
 
-    Ok(true)
+fn print_change_table(x: change::Table) -> anyhow::Result<bool> {
+    use change::Table as X;
+    use change::layers::layer11;
+    match x {
+        X::InsertRowPiece(Some(irp)) => {
+            println!("KTB Redo ");
+            println!(
+                "op: 0x{:02}  ver: 0x{:02}  ",
+                irp.op.b1.into_bits(), // display byte1, not only op code's bitfields
+                irp.op.b2.version(),
+            );
+            println!(
+                "compat bit: {} ({}) padding: {}",
+                layer11::IRPByte2::new()
+                    .with_post_11(irp.op.b2.post_11())
+                    .into_bits(),
+                if irp.op.b2.post_11() {
+                    "post-11"
+                } else {
+                    "pre-11"
+                },
+                if irp.op.b2.post_11() { 1 } else { 0 }
+            );
+            match irp.op.b1.op_ch() {
+                Some(ch) => {
+                    print!("op: {ch}  ");
+                    let rest = irp.op.rest()?;
+                    println!(
+                        "xid:  0x{:04x}.{:03x}.{:08x}    uba: 0x{:08x}.{:04x}.{:02x}",
+                        rest.xid.usn,
+                        rest.xid.slot,
+                        rest.xid.sequence,
+                        rest.uba.dba.0,
+                        rest.uba.seq,
+                        rest.uba.record,
+                    );
+                }
+                None => println!("op: [ktbdir] invalid op: 0x{:02X} ", irp.op.b1.into_bits()),
+            };
+
+            println!(
+                "KDO Op code: {} row dependencies {}",
+                match layer11::KdoOp::from_u8(irp.meta.byte1.op()) {
+                    Some(op) => match op {
+                        layer11::KdoOp::IUR => "IUR",
+                        layer11::KdoOp::IRP => "IRP",
+                        layer11::KdoOp::DRP => "DRP",
+                        layer11::KdoOp::LKR => "LKR",
+                        layer11::KdoOp::URP => "URP",
+                        layer11::KdoOp::ORP => "ORP",
+                        layer11::KdoOp::MFC => "MFC",
+                        layer11::KdoOp::CFA => "CFA",
+                        layer11::KdoOp::CKI => "CKI",
+                        layer11::KdoOp::SKL => "SKL",
+                        layer11::KdoOp::QMI => "QMI",
+                        layer11::KdoOp::QMD => "QMD",
+                        layer11::KdoOp::DSC => "DSC",
+                        layer11::KdoOp::LMN => "LMN",
+                        layer11::KdoOp::LLB => "LLB",
+                        layer11::KdoOp::SHK => "SHK",
+                        layer11::KdoOp::CMP => "CMP",
+                        layer11::KdoOp::DCU => "DCU",
+                        layer11::KdoOp::MRK => "MRK",
+                        layer11::KdoOp::IRP2 => "IRP2",
+                        layer11::KdoOp::DRP2 => "DRP2",
+                        layer11::KdoOp::CMP2 => "CMP2",
+                        layer11::KdoOp::DGD => "DGD",
+                    }
+                    .to_string(),
+                    None => format!("{}", irp.meta.byte1.op()),
+                },
+                // TODO verify?
+                if irp.meta.byte1.row_dependency() {
+                    "Enabled"
+                } else {
+                    "Disabled"
+                }
+            );
+
+            println!(
+                "  xtype: {} flags: 0x{:08x}  bdba: 0x{:08x}  hdba: 0x{:08x}",
+                match layer11::IRPXtype::from_u8(irp.meta.xtype.typ()) {
+                    Some(xt) => match xt {
+                        layer11::IRPXtype::XA => "XA",
+                        layer11::IRPXtype::XR => "XR",
+                        layer11::IRPXtype::CR => "CR",
+                    }
+                    .to_string(),
+                    None => format!("{}", irp.meta.xtype.typ()),
+                },
+                irp.meta.xtype.with_typ(0).into_bits(), // clear type, flags remained
+                irp.meta.bdba.0,
+                irp.meta.hdba.0,
+            );
+            println!(
+                "itli: {}  ispac: {}  maxfr: {}",
+                irp.meta.itli, irp.meta.ispac, irp.meta.maxfr,
+            );
+            println!(
+                "tabn: {} slot: {}(0x{:x}) size/delt: {}",
+                irp.meta.tabn as i32, // seems dumped as i32 in Oracle
+                irp.meta.slot,
+                irp.meta.slot,
+                irp.meta.delta_size,
+            );
+            println!(
+                "fb: {}{}{}{}{}{}{}{} lb: 0x{:x}  cc: {}",
+                if irp.meta.fb_flags.k() { 'K' } else { '-' },
+                if irp.meta.fb_flags.c() { 'C' } else { '-' },
+                if irp.meta.fb_flags.h() { 'H' } else { '-' },
+                if irp.meta.fb_flags.d() { 'D' } else { '-' },
+                if irp.meta.fb_flags.f() { 'F' } else { '-' },
+                if irp.meta.fb_flags.l() { 'L' } else { '-' },
+                if irp.meta.fb_flags.p() { 'P' } else { '-' },
+                if irp.meta.fb_flags.n() { 'N' } else { '-' },
+                irp.meta.lb,
+                irp.meta.column_count,
+            );
+
+            print!("null: ");
+            for c in 0..irp.meta.column_count {
+                let n = match irp.meta.is_col_null(c) {
+                    Some(is_null) => {
+                        if is_null {
+                            "N"
+                        } else {
+                            "-"
+                        }
+                    }
+                    None => "?",
+                };
+                print!("{}", n);
+            }
+            println!();
+
+            Ok(true)
+        }
+        _ => Ok(false),
+    }
 }
 
 fn print_change(
@@ -331,6 +474,7 @@ fn print_change(
     let printed = match change.parse() {
         Ok(Op::SegmentManagement(x)) => print_segment_management(x)?,
         Ok(Op::TransactionUndoManagement(x)) => print_tx_undo_management(x)?,
+        Ok(Op::Table(x)) => print_change_table(x)?,
         Err(e) => Err(e)?,
         _ => false,
     };

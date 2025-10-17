@@ -14,7 +14,7 @@ use crate::oracle::{
 
 // -----------------------------------------------------------------------------
 
-#[derive(KnownLayout, Immutable, FromBytes, Debug, PartialEq, Eq)]
+#[derive(KnownLayout, Immutable, FromBytes, Debug)]
 #[repr(C)]
 pub struct ObjInfo {
     pub obj: u32,
@@ -22,7 +22,7 @@ pub struct ObjInfo {
     pub itls: u16,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct BlockFormat<'a> {
     pub obj_info: &'a ObjInfo,
     pub scn: &'a Scn,
@@ -55,7 +55,7 @@ pub enum BlockLinkModifyOp {
     // 5..: unknown
 }
 
-#[derive(KnownLayout, Immutable, FromBytes, Debug, PartialEq, Eq)]
+#[derive(KnownLayout, Immutable, FromBytes, Debug)]
 #[repr(C)]
 pub struct BlockLinkModifyData {
     pub op_code: u8,
@@ -71,7 +71,7 @@ impl BlockLinkModifyData {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct BlockLinkModify<'a> {
     pub data: &'a BlockLinkModifyData,
 }
@@ -86,7 +86,7 @@ impl<'a> FromCV<'a> for BlockLinkModify<'a> {
 
 // -----------------------------------------------------------------------------
 
-#[derive(KnownLayout, Immutable, FromBytes, Debug, PartialEq, Eq)]
+#[derive(KnownLayout, Immutable, FromBytes, Debug)]
 #[repr(C)]
 pub struct FreelistModifyDataHead {
     pub op: u8,
@@ -121,7 +121,7 @@ impl FreelistModifyDataHead {
     }
 }
 
-#[derive(FromPrimitive, Debug, PartialEq, Eq)]
+#[derive(FromPrimitive, Debug)]
 #[repr(C)]
 pub enum FreelistModifyBaseOp {
     /// 1. HWMMV (move hwm)
@@ -155,7 +155,7 @@ pub enum FreelistModifyDataBody<'a> {
     Other(&'a FreelistModifyDataBodyOther),
 }
 
-#[derive(KnownLayout, Immutable, FromBytes, Debug, PartialEq, Eq)]
+#[derive(KnownLayout, Immutable, FromBytes, Debug)]
 #[repr(C)]
 pub struct FreelistModifyDataBodyOther {
     pub slot_count: u32,
@@ -166,7 +166,7 @@ pub struct FreelistModifyDataBodyOther {
     pub tail: u32,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct FreelistModify<'a> {
     pub modifies: Vec<&'a FreelistModifyDataHead>,
 }

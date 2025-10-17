@@ -20,12 +20,27 @@ enum Commands {
     /// dump redo file
     Dump {
         redo: PathBuf,
+
+        /// Dump raw vector content.
         #[arg(short, long, default_value = "false")]
         force_vector: bool,
     },
 
     /// fix checksum of redo file(to modify redo file and dump it using Oracle Database)
-    Fix { redo: PathBuf },
+    Fix {
+        redo: PathBuf,
+
+        /// Replacing byte sequence at specified offset of file.
+        ///
+        /// eg. `0x400,AABBCCDD` means in-replace bytes sequence at 0x400 from file head.
+        ///
+        /// Format: offset,[type:]content
+        ///     offset: offset from head, in decimal(1024), or hex(0x400)
+        ///     type: When specified one of [u16,u32,u64], content is an integer.
+        ///           When ignored, content is a hex string representing byte sequence.
+        #[arg(short, long)]
+        replaces: Vec<String>,
+    },
 }
 
 fn main() -> anyhow::Result<()> {
@@ -38,8 +53,8 @@ fn main() -> anyhow::Result<()> {
 
     match args.command {
         Commands::Dump { redo, force_vector } => read_redo(redo, force_vector),
-        Commands::Fix { redo } => {
-            fix_redo(redo)?;
+        Commands::Fix { redo, replaces } => {
+            fix_redo(redo, replaces)?;
             Ok(())
         }
     }

@@ -8,7 +8,7 @@ use crate::oracle::{
 
 // -----------------------------------------------------------------------------
 
-#[derive(KnownLayout, Immutable, FromBytes, Debug, PartialEq, Eq)]
+#[derive(KnownLayout, Immutable, FromBytes, Debug)]
 #[repr(C)]
 pub struct UndoHeaderRedoData {
     pub slt: u16,
@@ -23,7 +23,7 @@ pub struct UndoHeaderRedoData {
     pub parent_xid: Xid,
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct UndoHeaderRedo<'a> {
     pub data: &'a UndoHeaderRedoData,
     pub pdbuid: &'a u32,
@@ -40,7 +40,7 @@ impl<'a> FromCV<'a> for UndoHeaderRedo<'a> {
 
 // -----------------------------------------------------------------------------
 
-#[derive(KnownLayout, Immutable, FromBytes, Debug, PartialEq, Eq)]
+#[derive(KnownLayout, Immutable, FromBytes, Debug)]
 #[repr(C)]
 pub struct ChangeTxSlotStatusData {
     pub slot: u16,
@@ -59,7 +59,7 @@ pub struct ChangeTxSlotStatusData {
     _unknown_3: [u8; 3],
 }
 
-#[derive(KnownLayout, Immutable, FromBytes, Debug, PartialEq, Eq)]
+#[derive(KnownLayout, Immutable, FromBytes, Debug)]
 #[repr(C)]
 pub struct ChangeTxSlotStatusData2 {
     pub uba: UBA,
@@ -69,7 +69,7 @@ pub struct ChangeTxSlotStatusData2 {
     _unknown_1: [u8; 3],
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct ChangeTxSlotStatus<'a> {
     pub data: &'a ChangeTxSlotStatusData,
     pub data2: Option<&'a ChangeTxSlotStatusData2>,

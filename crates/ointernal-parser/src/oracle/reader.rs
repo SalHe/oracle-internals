@@ -265,7 +265,7 @@ impl RedoFileReader {
         let expected_size = target.len();
         let block_crossed =
             self.offset_in_block + expected_size >= self.file_header().header.block_size as usize;
-        trace!(expected_size, block_crossed, "begin read vector content");
+        trace!(expected_size, block_crossed, "begin read data");
 
         if block_crossed {
             let mut rest = expected_size;
@@ -276,7 +276,7 @@ impl RedoFileReader {
                 );
                 trace!(
                     self.content_offset,
-                    self.offset_in_block, can_read, "read slice of vector content"
+                    self.offset_in_block, can_read, "read slice of data"
                 );
 
                 target[(expected_size - rest)..(expected_size - rest + can_read)].copy_from_slice(
@@ -294,7 +294,7 @@ impl RedoFileReader {
                 self.content_offset,
                 self.offset_in_block,
                 can_read = expected_size,
-                "read all vector content"
+                "read all data"
             );
             target.copy_from_slice(
                 &self.curr_block[self.offset_in_block..(self.offset_in_block + expected_size)],
@@ -323,17 +323,20 @@ impl RedoFileReader {
             return Ok(None);
         }
 
+        trace!("reading change");
         let mut change_buffer = vec![0u8; std::mem::size_of::<Change>()];
         self.read_content(&mut change_buffer)?;
 
         let change = *Change::ref_from_bytes(&change_buffer).unwrap();
+        trace!(?change, "change read");
+
         let mut vector_size = Vec::with_capacity(change.vector_count() as usize);
         if change.vector_count() > 0 {
             vector_size.push(change.first_vector_size);
         }
 
         for i in 1..change.vector_count() {
-            trace!(vector_id = i - 1, "reading vector data");
+            trace!(vector_id = i, "reading vector data size");
             let mut buffer = [0u8; 2];
             self.read_content(&mut buffer)?;
             vector_size.push(u16::from_le_bytes(buffer));
@@ -348,8 +351,9 @@ impl RedoFileReader {
         }
 
         let mut vector_data = Vec::with_capacity(change.vector_count() as usize);
-        for size in vector_size {
-            let mut buffer = vec![0u8; padding_size(size as u64, 4) as usize];
+        for (i, size) in vector_size.iter().enumerate() {
+            trace!(vector_id = i, "reading vector data content");
+            let mut buffer = vec![0u8; padding_size(*size as u64, 4) as usize];
             self.read_content(&mut buffer)?;
             vector_data.push(buffer);
         }
