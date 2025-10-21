@@ -312,6 +312,8 @@ impl<'a> FromCV<'a> for InsertRowPiece<'a> {
 impl InsertRowPiece<'_> {
     const COL_DATA_BASE_INDEX: usize = 2;
 
+    /// `VARCHAR(N)`: raw string bytes. 'AAAA' -> 41414141 (hex)
+    /// `NUMBER`: [crate::oracle::types::get_number_from_bytes]
     pub fn col_data(&self, col: usize) -> Option<Option<&'_ [u8]>> {
         self.meta.is_col_null(col as _).map(|is_null| {
             if is_null {
