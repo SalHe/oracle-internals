@@ -317,7 +317,8 @@ impl InsertRowPiece<'_> {
             if is_null {
                 None
             } else {
-                Some(&self.cv.vector[Self::COL_DATA_BASE_INDEX + col][..])
+                let i = Self::COL_DATA_BASE_INDEX + col;
+                Some(&self.cv.vector[i][..(self.cv.vector_size[i] as _)])
             }
         })
     }

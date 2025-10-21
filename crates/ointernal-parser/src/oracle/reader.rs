@@ -351,16 +351,20 @@ impl RedoFileReader {
         }
 
         let mut vector_data = Vec::with_capacity(change.vector_count() as usize);
+        let mut vector_data_size = Vec::with_capacity(change.vector_count() as usize);
         for (i, size) in vector_size.iter().enumerate() {
             trace!(vector_id = i, "reading vector data content");
-            let mut buffer = vec![0u8; padding_size(*size as u64, 4) as usize];
+            let actual_size = *size as u64;
+            let mut buffer = vec![0u8; padding_size(actual_size, 4) as usize];
             self.read_content(&mut buffer)?;
             vector_data.push(buffer);
+            vector_data_size.push(actual_size);
         }
 
         Ok(Some(ChangeAndVector {
             change,
             vector: vector_data,
+            vector_size: vector_data_size,
         }))
     }
 }

@@ -38,4 +38,5 @@ where
 pub struct ChangeAndVector {
     pub change: Change,
     pub vector: Vec<Vec<u8>>,
+    pub vector_size: Vec<u64>,
 }

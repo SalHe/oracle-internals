@@ -271,7 +271,11 @@ fn print_tx_undo_management(x: change::TransactionUndoManagement) -> anyhow::Res
         X::UndoHeaderRedo(Some(b)) => {
             println!(
                 "ktudh redo: slt: 0x{:04x} sqn: 0x{:08x} flg: 0x{:04x} siz: {} fbi: {}",
-                b.data.slt, b.data.sqn, b.data.flag.into_bits(), b.data.size, b.data.fbi,
+                b.data.slt,
+                b.data.sqn,
+                b.data.flag.into_bits(),
+                b.data.size,
+                b.data.fbi,
             );
             print!(
                 "            uba: 0x{:08x}.{:04x}.{:02x}    pxid:  0x{:04x}.{:03x}.{:08x}",
@@ -458,7 +462,7 @@ fn print_change_table(x: change::Table) -> anyhow::Result<bool> {
                     "col {:>2}: {}{}",
                     i,
                     if let Some(c) = col {
-                        &format!("[{}] ", c.len()) // TODO how to determine data length?
+                        &format!("[{}] ", c.len())
                     } else {
                         ""
                     },
