@@ -271,18 +271,21 @@ fn print_tx_undo_management(x: change::TransactionUndoManagement) -> anyhow::Res
         X::UndoHeaderRedo(Some(b)) => {
             println!(
                 "ktudh redo: slt: 0x{:04x} sqn: 0x{:08x} flg: 0x{:04x} siz: {} fbi: {}",
-                b.data.slt, b.data.sqn, b.data.flag, b.data.size, b.data.fbi,
+                b.data.slt, b.data.sqn, b.data.flag.into_bits(), b.data.size, b.data.fbi,
             );
-            println!(
-                "            uba: 0x{:08x}.{:04x}.{:02x}    pxid:  0x{:04x}.{:03x}.{:08x}        pdbuid:{}",
+            print!(
+                "            uba: 0x{:08x}.{:04x}.{:02x}    pxid:  0x{:04x}.{:03x}.{:08x}",
                 b.data.uba.dba.0,
                 b.data.uba.seq,
                 b.data.uba.record,
                 b.data.parent_xid.usn,
                 b.data.parent_xid.slot,
                 b.data.parent_xid.sequence,
-                b.pdbuid,
             );
+            match b.pdbuid {
+                Some(pdbuid) => println!("        pdbuid:{pdbuid}"),
+                None => println!(),
+            }
             Ok(true)
         }
         X::ChangeTxSlotStatus(Some(b)) => {
@@ -332,22 +335,25 @@ fn print_change_table(x: change::Table) -> anyhow::Result<bool> {
                 },
                 if irp.op.b2.post_11() { 1 } else { 0 }
             );
-            match irp.op.b1.op_ch() {
-                Some(ch) => {
-                    print!("op: {ch}  ");
-                    let rest = irp.op.rest()?;
-                    println!(
-                        "xid:  0x{:04x}.{:03x}.{:08x}    uba: 0x{:08x}.{:04x}.{:02x}",
-                        rest.xid.usn,
-                        rest.xid.slot,
-                        rest.xid.sequence,
-                        rest.uba.dba.0,
-                        rest.uba.seq,
-                        rest.uba.record,
-                    );
-                }
+
+            match irp.op.rest()? {
+                Some(r) => match r {
+                    layer11::InsertRowPieceOpRest::F(f) => println!(
+                        "op: F  xid:  0x{:04x}.{:03x}.{:08x}    uba: 0x{:08x}.{:04x}.{:02x}",
+                        f.xid.usn, f.xid.slot, f.xid.sequence, f.uba.dba.0, f.uba.seq, f.uba.record,
+                    ),
+                    layer11::InsertRowPieceOpRest::C(uba) => println!(
+                        "op: C  uba: 0x{:08x}.{:04x}.{:02x}",
+                        uba.dba.0, uba.seq, uba.record,
+                    ),
+                    layer11::InsertRowPieceOpRest::Z => println!("op: Z ??????????????"),
+                    layer11::InsertRowPieceOpRest::L => println!("op: L ??????????????"),
+                    layer11::InsertRowPieceOpRest::R => println!("op: R ??????????????"),
+                    layer11::InsertRowPieceOpRest::N => println!("op: N ??????????????"),
+                    layer11::InsertRowPieceOpRest::G => println!("op: G ??????????????"),
+                },
                 None => println!("op: [ktbdir] invalid op: 0x{:02X} ", irp.op.b1.into_bits()),
-            };
+            }
 
             println!(
                 "KDO Op code: {} row dependencies {}",
@@ -443,6 +449,22 @@ fn print_change_table(x: change::Table) -> anyhow::Result<bool> {
                 print!("{}", n);
             }
             println!();
+
+            for (i, col) in (0..irp.meta.column_count)
+                .map(|i| irp.col_data(i as _).expect("Column must exist"))
+                .enumerate()
+            {
+                println!(
+                    "col {:>2}: {}{}",
+                    i,
+                    if let Some(c) = col {
+                        &format!("[{}] ", c.len()) // TODO how to determine data length?
+                    } else {
+                        ""
+                    },
+                    col.map(|d| hex::encode(&d)).unwrap_or("*NULL*".to_string())
+                );
+            }
 
             Ok(true)
         }

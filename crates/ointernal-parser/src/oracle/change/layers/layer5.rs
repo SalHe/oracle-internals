@@ -1,3 +1,4 @@
+use bitfield_struct::bitfield;
 use zerocopy::{FromBytes, Immutable, KnownLayout};
 
 use crate::oracle::{
@@ -16,24 +17,40 @@ pub struct UndoHeaderRedoData {
     _unknown_1: [u8; 2],
     pub sqn: u32,
     pub uba: UBA,
-    pub flag: u16,
+    pub flag: UndoHeaderRedoDataFlag,
     pub size: u16,
     pub fbi: u8,
     _unknown_2: [u8; 3],
     pub parent_xid: Xid,
 }
 
+#[bitfield(u16)]
+#[derive(KnownLayout, Immutable, FromBytes)]
+pub struct UndoHeaderRedoDataFlag {
+    #[bits(6)]
+    unknown: u16,
+    #[bits(1)]
+    pub pdb_uid: bool,
+    #[bits(9)]
+    unknown2: u16,
+}
+
 #[derive(Debug)]
 pub struct UndoHeaderRedo<'a> {
     pub data: &'a UndoHeaderRedoData,
-    pub pdbuid: &'a u32,
+    pub pdbuid: Option<&'a u32>,
 }
 
 impl<'a> FromCV<'a> for UndoHeaderRedo<'a> {
     fn from_cv(cv: &'a crate::oracle::change::ChangeAndVector) -> Result<Self, ConvertError> {
+        let data = FromBytes::ref_from_bytes(&cv.vector[0])?;
         Ok(Self {
-            data: FromBytes::ref_from_bytes(&cv.vector[0])?,
-            pdbuid: FromBytes::ref_from_bytes(&cv.vector[1])?,
+            data,
+            pdbuid: if data.flag.pdb_uid() {
+                Some(FromBytes::ref_from_bytes(&cv.vector[1])?)
+            } else {
+                None
+            },
         })
     }
 }

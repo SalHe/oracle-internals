@@ -20,21 +20,43 @@ pub struct InsertRowPieceOp {
 }
 
 impl InsertRowPieceOp {
-    pub fn rest(&self) -> Result<&InsertRowPieceOpRest, ConvertError> {
+    pub fn rest(&'_ self) -> Result<Option<InsertRowPieceOpRest<'_>>, ConvertError> {
         let rest = if self.b2.start_from_8() {
-            InsertRowPieceOpRest::ref_from_bytes(&self.rest[4..])?
+            &self.rest[4..]
         } else {
-            InsertRowPieceOpRest::ref_from_bytes(&self.rest)?
+            &self.rest
         };
-        Ok(rest)
+
+        let r = match self.b1.op() {
+            1 => Some(InsertRowPieceOpRest::F(FromBytes::ref_from_bytes(rest)?)),
+            2 => Some(InsertRowPieceOpRest::C(FromBytes::ref_from_bytes(rest)?)),
+            3 => todo!(),
+            4 => todo!(),
+            5 => todo!(),
+            6 => todo!(),
+            8 => todo!(),
+            _ => None,
+        };
+
+        Ok(r)
     }
 }
 
 #[derive(KnownLayout, Immutable, FromBytes, Debug)]
 #[repr(C)]
-pub struct InsertRowPieceOpRest {
+pub struct InsertRowPieceOpRestF {
     pub xid: Xid,
     pub uba: UBA,
+}
+
+pub enum InsertRowPieceOpRest<'a> {
+    F(&'a InsertRowPieceOpRestF),
+    C(&'a UBA),
+    Z,
+    L,
+    R,
+    N,
+    G,
 }
 
 #[bitfield(u8)]
@@ -148,7 +170,7 @@ impl InsertRowPieceMeta {
 
     pub fn is_col_null(&self, col: u8) -> Option<bool> {
         if col < self.column_count {
-            Some(self.rest[(col as usize) / 8] >> (col % 8) != 0)
+            Some((self.rest[(col as usize) / 8] >> (col % 8)) & 1 != 0)
         } else {
             None
         }
@@ -271,17 +293,32 @@ pub struct IRPMetaByte2 {
 
 #[derive(Debug)]
 pub struct InsertRowPiece<'a> {
+    cv: &'a ChangeAndVector,
     pub op: &'a InsertRowPieceOp,
     pub meta: &'a InsertRowPieceMeta,
 }
 
 impl<'a> FromCV<'a> for InsertRowPiece<'a> {
     fn from_cv(cv: &'a ChangeAndVector) -> Result<Self, ConvertError> {
-        // TODO columns data from vector[2..]
-        // TODO nulls?
+        let meta: &'a InsertRowPieceMeta = FromBytes::ref_from_bytes(&cv.vector[1])?;
         Ok(Self {
+            cv,
             op: FromBytes::ref_from_bytes(&cv.vector[0])?,
-            meta: FromBytes::ref_from_bytes(&cv.vector[1])?,
+            meta,
+        })
+    }
+}
+
+impl InsertRowPiece<'_> {
+    const COL_DATA_BASE_INDEX: usize = 2;
+
+    pub fn col_data(&self, col: usize) -> Option<Option<&'_ [u8]>> {
+        self.meta.is_col_null(col as _).map(|is_null| {
+            if is_null {
+                None
+            } else {
+                Some(&self.cv.vector[Self::COL_DATA_BASE_INDEX + col][..])
+            }
         })
     }
 }
