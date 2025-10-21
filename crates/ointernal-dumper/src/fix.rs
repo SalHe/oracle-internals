@@ -34,7 +34,7 @@ fn parse_int<T: Num>(v: &str) -> Result<T, <T as Num>::FromStrRadixErr> {
     }
 }
 
-fn parse_replace(r: &String) -> anyhow::Result<(u64, Vec<u8>)> {
+fn parse_replace(r: &str) -> anyhow::Result<(u64, Vec<u8>)> {
     let (addr, bin) = r
         .split_once(',')
         .ok_or(anyhow!("incorrect replace string format."))?;
@@ -75,7 +75,7 @@ pub fn fix_redo(file: PathBuf, replaces: Vec<String>) -> anyhow::Result<()> {
         println!("         new {}", hex::encode(&bin));
     }
     f.flush()?;
-    if replaces.len() > 0 {
+    if !replaces.is_empty() {
         println!();
     }
 

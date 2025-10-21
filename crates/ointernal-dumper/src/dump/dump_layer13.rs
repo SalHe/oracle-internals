@@ -11,7 +11,7 @@ impl DumpRedo for SegmentManagement<'_> {
             Self::BlockFormatRedo(Some(b)) => b.dump(),
             Self::BlockLinkModify(Some(b)) => b.dump(),
             Self::FreelistModify(Some(b)) => b.dump(),
-            _ => return Ok(false),
+            _ => Ok(false),
         }
     }
 }

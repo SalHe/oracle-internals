@@ -162,7 +162,7 @@ impl DumpRedo for InsertRowPiece<'_> {
                 } else {
                     ""
                 },
-                col.map(|d| hex::encode(&d)).unwrap_or("*NULL*".to_string())
+                col.map(hex::encode).unwrap_or("*NULL*".to_string())
             );
         }
 

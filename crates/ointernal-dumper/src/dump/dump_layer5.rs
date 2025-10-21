@@ -10,7 +10,7 @@ impl DumpRedo for TransactionUndoManagement<'_> {
         match self {
             Self::UndoHeaderRedo(Some(b)) => b.dump(),
             Self::ChangeTxSlotStatus(Some(b)) => b.dump(),
-            _ => return Ok(false),
+            _ => Ok(false),
         }
     }
 }
