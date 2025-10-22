@@ -52,7 +52,7 @@ impl DumpRedo for ChangeTxSlotStatus<'_> {
         if let Some(d) = self.data2 {
             print!(
                 " ktucf redo: uba: 0x{:08x}.{:04x}.{:02x} ext: {} spc: {} fbi: {} ",
-                d.uba.dba.0, d.uba.seq, d.uba.seq, d.ext, d.spc, d.fbi
+                d.uba.dba.0, d.uba.seq, d.uba.record, d.ext, d.spc, d.fbi
             );
         }
 

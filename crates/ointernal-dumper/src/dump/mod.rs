@@ -36,7 +36,7 @@ fn print_header_info(fh: &FileHeaderBlock, rh: &RedoFileHead) {
     println!(" FILE HEADER:");
     println!("	Compatibility Vsn = {}=0x{:08X}", rh.vsn, rh.vsn);
     println!(
-        "	Db ID={}=0x{:08X}, Db Name='{}'",
+        "	Db ID={}=0x{:08x}, Db Name='{}'",
         rh.db_id,
         rh.db_id,
         String::from_utf8_lossy(&rh.db_name),
@@ -165,7 +165,7 @@ fn print_header_info(fh: &FileHeaderBlock, rh: &RedoFileHead) {
 
 fn print_record_head(i: usize, rba: RBA, head: &RedoRecordHeadCommon, ts: OracleTimestamp) {
     println!(
-        "{} - Thread: 1 RBA: 0x{:06x}.{:08x}.{:04x} LEN: 0x{:04x} VLD: 0x{:02x} CON_UID: {}",
+        "{} - Thread:? RBA: 0x{:06x}.{:08x}.{:04x} LEN: 0x{:04x} VLD: 0x{:02x} CON_UID: {}",
         format!("REDO RECORD#{i}").bold().green(),
         rba.seq,
         rba.block_id,
@@ -175,7 +175,7 @@ fn print_record_head(i: usize, rba: RBA, head: &RedoRecordHeadCommon, ts: Oracle
         head.con_uid,
     );
     println!(
-        "SCN: 0x{:016x} SUBSCN:  {} {}",
+        "SCN: 0x{:016x} SUBSCN: {} {}",
         head.scn().full_scn(),
         head.sub_scn,
         OracleDateTime::from(ts),
@@ -200,8 +200,8 @@ fn print_change(
     change: &ChangeAndVector,
 ) -> anyhow::Result<()> {
     println!(
-        "{} CON_ID:{} TYP:{} CLS:{} AFN:{} DBA:{:08x} OBJ:{} SCN:0x{:016x} SEQ:{} OP:{}.{} ENC:? RBL:? FLG:0x{:04x}",
-        format!("CHANGE #{i} ").green(),
+        "{} CON_ID:{} TYP:{} CLS:{} AFN:{} DBA:0x{:08x} OBJ:{} SCN:0x{:016x} SEQ:{} OP:{}.{} ENC:? RBL:? FLG:0x{:04x}",
+        format!("CHANGE #{i}").green(),
         change.change.cont_id,
         change.change.type_,
         change.change.block_class,

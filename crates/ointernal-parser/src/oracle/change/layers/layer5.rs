@@ -63,9 +63,9 @@ pub struct ChangeTxSlotStatusData {
     pub slot: u16,
     /// #{AMND}
     _unknown_1: u16,
-    pub seq: i8,
+    pub seq: u16,
     /// #{AMND}
-    _unknown_2: [u8; 3],
+    _unknown_2: [u8; 2],
     pub srt: u32,
     pub sta: i32,
 

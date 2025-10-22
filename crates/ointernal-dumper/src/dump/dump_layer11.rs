@@ -155,10 +155,10 @@ impl DumpRedo for InsertRowPiece<'_> {
             .enumerate()
         {
             println!(
-                "col {:>2}: {}{}",
+                "col {:>2}: {} {}",
                 i,
                 if let Some(c) = col {
-                    &format!("[{}] ", c.len())
+                    &format!("[{:>2}] ", c.len())
                 } else {
                     ""
                 },

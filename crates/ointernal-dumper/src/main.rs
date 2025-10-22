@@ -4,6 +4,7 @@ mod fix;
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
+use ointernal_parser::oracle::types::get_number_from_bytes;
 use tracing_subscriber::EnvFilter;
 
 use crate::{dump::read_redo, fix::fix_redo};
@@ -41,6 +42,9 @@ enum Commands {
         #[arg(short, long)]
         replaces: Vec<String>,
     },
+
+    /// Try represent bytes(hex) in Oracle Database's types.
+    Represent { hex: String },
 }
 
 fn main() -> anyhow::Result<()> {
@@ -55,6 +59,12 @@ fn main() -> anyhow::Result<()> {
         Commands::Dump { redo, force_vector } => read_redo(redo, force_vector),
         Commands::Fix { redo, replaces } => {
             fix_redo(redo, replaces)?;
+            Ok(())
+        }
+        Commands::Represent { hex } => {
+            let hex = hex.replace(' ', "");
+            let bytes = hex::decode(&hex)?;
+            println!("Number: {:?}", get_number_from_bytes(&bytes));
             Ok(())
         }
     }

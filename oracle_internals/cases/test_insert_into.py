@@ -11,19 +11,7 @@ class TestInsertIntoOneColumn(CaseBase):
         with get_connection() as connection:
             with connection.cursor() as cursor:
                 connection.begin()
-                for i in range(258):
-                    cursor.execute(f'insert into t1 values ({i})')
-
-                # splitter
-                cursor.execute(f'insert into t1 values (0)')
-                cursor.execute(f'insert into t1 values (0)')
-                cursor.execute(f'insert into t1 values (0)')
-                cursor.execute(f'insert into t1 values (0)')
-                cursor.execute(f'insert into t1 values (0)')
-
-                for i in range(65533, 65538):
-                    cursor.execute(f'insert into t1 values ({i})')
-
+                cursor.execute(f'insert into t1 values (1)')
                 connection.commit()
 
     def _cleanup(self, get_connection):
