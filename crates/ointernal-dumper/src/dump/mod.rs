@@ -59,7 +59,10 @@ fn print_header_info(fh: &FileHeaderBlock, rh: &RedoFileHead) {
             _ => "???",
         }
     );
-    println!(r#" descrip:"{}""#, String::from_utf8_lossy(&rh.description));
+    println!(
+        r#" descrip:"{}""#,
+        String::from_utf8_lossy(&rh.description).replace('\0', "")
+    );
     println!(
         " thread: {} nab: 0x{:x} seq: 0x{:08x} hws: 0x{:x} eot: {} dis: {}",
         rh.thread, rh.nab, rh.head.seq, rh.hws, rh.dis, rh.eot,
