@@ -275,8 +275,8 @@ impl RedoFileReader {
                     rest,
                 );
                 trace!(
-                    self.content_offset,
-                    self.offset_in_block, can_read, "read slice of data"
+                    block_id = self.curr_block_head().id,
+                    self.content_offset, self.offset_in_block, can_read, "read slice of data",
                 );
 
                 target[(expected_size - rest)..(expected_size - rest + can_read)].copy_from_slice(
@@ -291,6 +291,7 @@ impl RedoFileReader {
             }
         } else {
             trace!(
+                block_id = self.curr_block_head().id,
                 self.content_offset,
                 self.offset_in_block,
                 can_read = expected_size,

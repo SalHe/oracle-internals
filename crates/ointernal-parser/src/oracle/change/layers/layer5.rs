@@ -3,7 +3,7 @@ use zerocopy::{FromBytes, Immutable, KnownLayout};
 
 use crate::oracle::{
     change::{ConvertError, cv::FromCV, layers::Xid},
-    redo::UBA,
+    redo::{DBA, UBA},
     scn::Scn,
 };
 
@@ -110,6 +110,149 @@ impl<'a> FromCV<'a> for ChangeTxSlotStatus<'a> {
             } else {
                 None
             },
+        })
+    }
+}
+
+// -----------------------------------------------------------------------------
+
+/// ktudb redo
+#[derive(KnownLayout, Immutable, FromBytes, Debug)]
+#[repr(C)]
+pub struct UndoBlockRedoData {
+    pub size: u16,
+    pub space: u16,
+    pub flags: u16,
+    /// #{AMND}
+    unknown: [u8; 2],
+    pub xid: Xid,
+    pub seq: u16,
+    pub rec: u8,
+    /// #{AMND}
+    unknown2: [u8; 1],
+}
+
+/// ktubl redo
+#[derive(KnownLayout, Immutable, FromBytes, Debug)]
+#[repr(C)]
+pub struct UndoBlockRedoData2 {
+    pub objn: u32,
+    pub objd: u32,
+    pub tsn: i32,
+    pub dba: DBA,
+
+    pub record_layer_code: u8,
+    pub record_op_code: u8,
+
+    pub slot: u8,
+    pub rci: u8,
+
+    pub flags: UndoBlockRedoData2Flag,
+    pub wrap: u16,
+    rest: [u8],
+}
+
+impl UndoBlockRedoData2 {
+    pub fn rest(&self) -> Result<UndoBlockRedoData2Rest<'_>, ConvertError> {
+        if self.flags.extended() {
+            Ok(UndoBlockRedoData2Rest::Extended(FromBytes::ref_from_bytes(
+                &self.rest,
+            )?))
+        } else {
+            Ok(UndoBlockRedoData2Rest::Standard(FromBytes::ref_from_bytes(
+                &self.rest,
+            )?))
+        }
+    }
+}
+
+pub enum UndoBlockRedoData2Rest<'a> {
+    Standard(&'a UndoBlockRedoData2CommonRest),
+    Extended(&'a UndoBlockRedoData2RestExt),
+}
+
+#[derive(KnownLayout, Immutable, FromBytes, Debug)]
+#[repr(C)]
+pub struct UndoBlockRedoData2RestExt {
+    pub flags2: u16,
+    pub buext_idx: u16,
+    pub common: UndoBlockRedoData2CommonRest,
+}
+
+#[derive(KnownLayout, Immutable, FromBytes, Debug)]
+#[repr(C)]
+pub struct UndoBlockRedoData2CommonRest {
+    pub prev_ctl_uba: UBA,
+    pub prev_ctl_max_cmt_scn: Scn,
+    pub prev_tx_cmt_scn: Scn,
+    unknown: [u8; 4],
+    pub txn_start_scn: Scn,
+    pub prev_brb: u32,
+    pub prev_bcl: u32,
+    pub logon_user: u32,
+}
+
+#[bitfield(u16)]
+#[derive(KnownLayout, Immutable, FromBytes)]
+pub struct UndoBlockRedoData2Flag {
+    /// 0. Regular Redo
+    /// 1. MBU - HEAD
+    /// 2. MBU - TAIL
+    /// 3. MBU - HEAD ??
+    #[bits(2)]
+    pub undo_type: u16,
+
+    #[bits(1)]
+    pub last_buffer_split: bool,
+
+    /// true: ktubl redo  - Begin trans
+    /// false: ktubu redo
+    #[bits(1)]
+    pub is_ktubl: bool,
+
+    #[bits(1)]
+    pub user_undo_done: bool,
+
+    #[bits(1)]
+    pub temp_object: bool,
+
+    #[bits(1)]
+    pub user_only: bool,
+
+    #[bits(1)]
+    pub tablespace_undo: bool,
+
+    #[bits(1)]
+    pub mbu_mid: bool,
+
+    #[bits(1)]
+    unknown: u16,
+
+    ///  txn start scn:  0x0000000000000000  logon user: 0
+    /// prev brb:  0x01000772  prev bcl:  0x00000000
+    #[bits(1)]
+    pub txn_start_scn: bool,
+
+    /// true:  start from 28
+    /// false: start from 24
+    #[bits(1)]
+    pub extended: bool,
+
+    #[bits(4)]
+    unknown2: u16,
+}
+
+#[derive(Debug)]
+pub struct UndoBlockRedo<'a> {
+    pub data: &'a UndoBlockRedoData,
+    pub data2: &'a UndoBlockRedoData2,
+}
+
+impl<'a> FromCV<'a> for UndoBlockRedo<'a> {
+    fn from_cv(cv: &'a crate::oracle::change::ChangeAndVector) -> Result<Self, ConvertError> {
+        Ok(Self {
+            data: FromBytes::ref_from_bytes(&cv.vector[0])?,
+            data2: FromBytes::ref_from_bytes(&cv.vector[1])?,
         })
     }
 }
