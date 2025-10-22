@@ -31,12 +31,20 @@ pub trait FromCV<'a>
 where
     Self: Sized,
 {
-    fn from_cv(cv: &'a ChangeAndVector) -> Result<Self, ConvertError>;
+    fn from_vectors(v: &'a [VectorData]) -> Result<Self, ConvertError>;
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct ChangeAndVector {
     pub change: Change,
-    pub vector: Vec<Vec<u8>>,
-    pub vector_size: Vec<u64>,
+    pub vector: Vec<VectorData>,
+}
+
+#[derive(Debug)]
+pub struct VectorData {
+    /// Vector data which has padding.
+    pub data: Vec<u8>,
+
+    /// Actual size of vector data (padding exclusive.)
+    pub size: u64,
 }

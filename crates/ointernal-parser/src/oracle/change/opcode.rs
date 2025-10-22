@@ -6,7 +6,7 @@ use thiserror::Error;
 
 use crate::oracle::change::cv::FromCV;
 
-use super::{ChangeAndVector, ConvertError, layers};
+use super::{ChangeAndVector, ConvertError, VectorData, layers};
 
 #[derive(Error, Debug)]
 pub enum OpDataError {
@@ -96,24 +96,28 @@ macro_rules! codes_for_layer {
         // op data parsing
         impl ChangeAndVector {
             pub fn parse<'a>(&'a self) -> Result<Op<'a>, OpDataError> {
-                let op = Op::parse((self.change.layer, self.change.op))
-                            .ok_or(OpDataError::UnrecognizedOp(self.change.layer, self.change.op))?;
-                match op {
-                    $(
-                        Op::$layer_name(op_code) => match op_code {
-                            $(
-                                $layer_name::$op_name(_) => {
-                                    $(
-                                        return Ok(Op::$layer_name($layer_name::$op_name(Some(<$($op_data_type)::*<'a>>::from_cv(&self)?))));
-                                    )?
-                                    #[allow(unreachable_code)]
-                                    Ok(Op::$layer_name($layer_name::$op_name(None)))
-                                }
-                            )*
-                            $layer_name::Unknown(_) => unreachable!(),
-                        }
-                    )*
-                }
+                parse_impl(self.change.layer, self.change.op, &self.vector)
+            }
+        }
+
+        pub fn parse_impl(layer: u8, op: u8, vectors: &[VectorData]) -> Result<Op<'_>, OpDataError> {
+            let op = Op::parse((layer, op))
+                        .ok_or(OpDataError::UnrecognizedOp(layer, op))?;
+            match op {
+                $(
+                    Op::$layer_name(op_code) => match op_code {
+                        $(
+                            $layer_name::$op_name(_) => {
+                                $(
+                                    return Ok(Op::$layer_name($layer_name::$op_name(Some(<$($op_data_type)::*<'_>>::from_vectors(vectors)?))));
+                                )?
+                                #[allow(unreachable_code)]
+                                Ok(Op::$layer_name($layer_name::$op_name(None)))
+                            }
+                        )*
+                        $layer_name::Unknown(_) => unreachable!(),
+                    }
+                )*
             }
         }
     };
@@ -270,7 +274,7 @@ codes_for_layer! {
 
     Table = 11:
         /// undo row operation
-        UndoRowOperation = 1,
+        UndoRowOperation = 1 !layers::layer11::InsertRowPiece, // TODO what's the type? it's similar with 11.2
         /// IRP insert row piece
         InsertRowPiece = 2 !layers::layer11::InsertRowPiece,
         /// DRP delete row piece

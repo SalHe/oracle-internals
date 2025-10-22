@@ -3,7 +3,7 @@ use num_derive::FromPrimitive;
 use zerocopy::{FromBytes, Immutable, KnownLayout};
 
 use crate::oracle::{
-    change::{ChangeAndVector, ConvertError, cv::FromCV, layers::Xid},
+    change::{ConvertError, VectorData, cv::FromCV, layers::Xid},
     redo::{DBA, UBA},
 };
 
@@ -30,7 +30,7 @@ impl InsertRowPieceOp {
         let r = match self.b1.op() {
             1 => Some(InsertRowPieceOpRest::F(FromBytes::ref_from_bytes(rest)?)),
             2 => Some(InsertRowPieceOpRest::C(FromBytes::ref_from_bytes(rest)?)),
-            3 => todo!(),
+            3 => Some(InsertRowPieceOpRest::Z),
             4 => todo!(),
             5 => todo!(),
             6 => todo!(),
@@ -293,17 +293,28 @@ pub struct IRPMetaByte2 {
 
 #[derive(Debug)]
 pub struct InsertRowPiece<'a> {
-    cv: &'a ChangeAndVector,
+    v: &'a [VectorData],
     pub op: &'a InsertRowPieceOp,
     pub meta: &'a InsertRowPieceMeta,
 }
 
 impl<'a> FromCV<'a> for InsertRowPiece<'a> {
-    fn from_cv(cv: &'a ChangeAndVector) -> Result<Self, ConvertError> {
-        let meta: &'a InsertRowPieceMeta = FromBytes::ref_from_bytes(&cv.vector[1])?;
+    fn from_vectors(v: &'a [VectorData]) -> Result<Self, ConvertError> {
+        const FAKE: (u64, [u8; 48]) = (
+            0,
+            [0u8; /* std::mem::size_of::<InsertRowPieceMeta>() >= */ _],
+        );
+
+        let meta: &'a InsertRowPieceMeta = if v[1].data.len() >= FAKE.1.len() {
+            FromBytes::ref_from_bytes(&v[1].data)?
+        } else {
+            // TODO other kinds of InsertRowPieceMeta
+            FromBytes::ref_from_bytes(&FAKE.1)?
+        };
+
         Ok(Self {
-            cv,
-            op: FromBytes::ref_from_bytes(&cv.vector[0])?,
+            v,
+            op: FromBytes::ref_from_bytes(&v[0].data)?,
             meta,
         })
     }
@@ -320,7 +331,7 @@ impl InsertRowPiece<'_> {
                 None
             } else {
                 let i = Self::COL_DATA_BASE_INDEX + col;
-                Some(&self.cv.vector[i][..(self.cv.vector_size[i] as _)])
+                Some(&self.v[i].data[..(self.v[i].size as _)])
             }
         })
     }

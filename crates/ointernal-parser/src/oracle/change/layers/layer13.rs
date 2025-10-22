@@ -4,7 +4,7 @@ use zerocopy::{FromBytes, Immutable, KnownLayout};
 
 use crate::oracle::{
     change::{
-        ChangeAndVector,
+        VectorData,
         cv::{ConvertError, FromCV},
         layers::Xid,
     },
@@ -29,10 +29,10 @@ pub struct BlockFormat<'a> {
 }
 
 impl<'a> FromCV<'a> for BlockFormat<'a> {
-    fn from_cv(cv: &'a ChangeAndVector) -> Result<Self, ConvertError> {
+    fn from_vectors(v: &'a [VectorData]) -> Result<Self, ConvertError> {
         Ok(Self {
-            obj_info: FromBytes::ref_from_bytes(&cv.vector[0])?,
-            scn: FromBytes::ref_from_bytes(&cv.vector[1])?,
+            obj_info: FromBytes::ref_from_bytes(&v[0].data)?,
+            scn: FromBytes::ref_from_bytes(&v[1].data)?,
         })
     }
 }
@@ -77,9 +77,9 @@ pub struct BlockLinkModify<'a> {
 }
 
 impl<'a> FromCV<'a> for BlockLinkModify<'a> {
-    fn from_cv(cv: &'a ChangeAndVector) -> Result<Self, ConvertError> {
+    fn from_vectors(v: &'a [VectorData]) -> Result<Self, ConvertError> {
         Ok(Self {
-            data: FromBytes::ref_from_bytes(&cv.vector[0])?,
+            data: FromBytes::ref_from_bytes(&v[0].data)?,
         })
     }
 }
@@ -172,10 +172,10 @@ pub struct FreelistModify<'a> {
 }
 
 impl<'a> FromCV<'a> for FreelistModify<'a> {
-    fn from_cv(cv: &'a ChangeAndVector) -> Result<Self, ConvertError> {
+    fn from_vectors(v: &'a [VectorData]) -> Result<Self, ConvertError> {
         let mut modifies = Vec::new();
-        for v in &cv.vector {
-            modifies.push(FreelistModifyDataHead::ref_from_bytes(v)?);
+        for v in v {
+            modifies.push(FreelistModifyDataHead::ref_from_bytes(&v.data)?);
         }
         Ok(Self { modifies })
     }

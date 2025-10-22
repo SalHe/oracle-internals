@@ -5,7 +5,7 @@ mod dump_layer5;
 use std::path::PathBuf;
 
 use colored::Colorize;
-use ointernal_parser::oracle::change::{self, ChangeAndVector, Op};
+use ointernal_parser::oracle::change::{ChangeAndVector, Op};
 use ointernal_parser::oracle::reader::ReaderError;
 use ointernal_parser::oracle::redo::MiscFlags;
 use ointernal_parser::oracle::timestamp::DateTime as OracleDateTime;
@@ -189,10 +189,11 @@ fn print_record_head(i: usize, rba: RBA, head: &RedoRecordHeadCommon, ts: Oracle
     );
 }
 
-fn print_change_table(x: change::Table) -> anyhow::Result<bool> {
-    use change::Table as X;
-    match x {
-        X::InsertRowPiece(Some(irp)) => irp.dump(),
+fn print_record(op: &Op<'_>) -> anyhow::Result<bool> {
+    match op {
+        Op::SegmentManagement(x) => x.dump(),
+        Op::TransactionUndoManagement(x) => x.dump(),
+        Op::Table(x) => x.dump(),
         _ => Ok(false),
     }
 }
@@ -218,20 +219,14 @@ fn print_change(
         change.change.flags,
     );
 
-    let printed = match change.parse() {
-        Ok(Op::SegmentManagement(x)) => x.dump()?,
-        Ok(Op::TransactionUndoManagement(x)) => x.dump()?,
-        Ok(Op::Table(x)) => print_change_table(x)?,
-        Err(e) => Err(e)?,
-        _ => false,
-    };
+    let printed = print_record(&change.parse()?)?;
 
     if !printed || force_print_vector {
         for (i, v) in change.vector.iter().enumerate() {
             println!(
                 " {} {}",
-                format!("vector#{i}[{}]", v.len()).underline(),
-                hex::encode(v)
+                format!("vector#{i}[{}]", v.data.len()).underline(),
+                hex::encode(&v.data)
             );
         }
     }

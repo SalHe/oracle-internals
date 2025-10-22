@@ -2,7 +2,7 @@ use bitfield_struct::bitfield;
 use zerocopy::{FromBytes, Immutable, KnownLayout};
 
 use crate::oracle::{
-    change::{ConvertError, cv::FromCV, layers::Xid},
+    change::{ConvertError, Op, VectorData, cv::FromCV, layers::Xid, parse_impl},
     redo::{DBA, UBA},
     scn::Scn,
 };
@@ -42,12 +42,12 @@ pub struct UndoHeaderRedo<'a> {
 }
 
 impl<'a> FromCV<'a> for UndoHeaderRedo<'a> {
-    fn from_cv(cv: &'a crate::oracle::change::ChangeAndVector) -> Result<Self, ConvertError> {
-        let data = FromBytes::ref_from_bytes(&cv.vector[0])?;
+    fn from_vectors(v: &'a [VectorData]) -> Result<Self, ConvertError> {
+        let data = FromBytes::ref_from_bytes(&v[0].data)?;
         Ok(Self {
             data,
             pdbuid: if data.flag.pdb_uid() {
-                Some(FromBytes::ref_from_bytes(&cv.vector[1])?)
+                Some(FromBytes::ref_from_bytes(&v[1].data)?)
             } else {
                 None
             },
@@ -94,19 +94,19 @@ pub struct ChangeTxSlotStatus<'a> {
 }
 
 impl<'a> FromCV<'a> for ChangeTxSlotStatus<'a> {
-    fn from_cv(cv: &'a crate::oracle::change::ChangeAndVector) -> Result<Self, ConvertError> {
-        let data = FromBytes::ref_from_bytes(&cv.vector[0])?;
+    fn from_vectors(v: &'a [VectorData]) -> Result<Self, ConvertError> {
+        let data = FromBytes::ref_from_bytes(&v[0].data)?;
         // cv.data[2] ???
         Ok(Self {
             data,
             data2: if data.flags & 0x02 != 0 {
-                Some(FromBytes::ref_from_bytes(&cv.vector[1])?)
+                Some(FromBytes::ref_from_bytes(&v[1].data)?)
             } else {
                 None
             },
             scn: if data.flags & 0x01 != 0 {
                 // TODO from ???
-                Some(FromBytes::ref_from_prefix(&cv.vector[2])?.0)
+                Some(FromBytes::ref_from_prefix(&v[2].data)?.0)
             } else {
                 None
             },
@@ -246,13 +246,18 @@ pub struct UndoBlockRedoData2Flag {
 pub struct UndoBlockRedo<'a> {
     pub data: &'a UndoBlockRedoData,
     pub data2: &'a UndoBlockRedoData2,
+    pub op: Option<Box<Op<'a>>>, // TODO trim Box ?
 }
 
 impl<'a> FromCV<'a> for UndoBlockRedo<'a> {
-    fn from_cv(cv: &'a crate::oracle::change::ChangeAndVector) -> Result<Self, ConvertError> {
+    fn from_vectors(v: &'a [VectorData]) -> Result<Self, ConvertError> {
+        let data2 = FromBytes::ref_from_bytes(&v[1].data)?;
         Ok(Self {
-            data: FromBytes::ref_from_bytes(&cv.vector[0])?,
-            data2: FromBytes::ref_from_bytes(&cv.vector[1])?,
+            data: FromBytes::ref_from_bytes(&v[0].data)?,
+            data2,
+            op: parse_impl(data2.record_layer_code, data2.record_op_code, &v[2..])
+                .ok() // TODO error handling?
+                .map(Box::new),
         })
     }
 }

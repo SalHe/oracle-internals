@@ -5,7 +5,7 @@ use ointernal_parser::oracle::change::{
     },
 };
 
-use crate::dump::DumpRedo;
+use crate::dump::{DumpRedo, print_record};
 
 impl DumpRedo for TransactionUndoManagement<'_> {
     fn dump(&self) -> anyhow::Result<bool> {
@@ -103,7 +103,9 @@ impl DumpRedo for UndoBlockRedo<'_> {
             };
         }
 
-        println!();
+        if let Some(op) = &self.op {
+            print_record(op)?;
+        }
         Ok(true)
     }
 }
