@@ -5,7 +5,7 @@ mod dump_layer5;
 use std::path::PathBuf;
 
 use colored::Colorize;
-use ointernal_parser::oracle::change::{ChangeAndVector, Op};
+use ointernal_parser::oracle::change::{ChangeAndVector, Op, OpDataError};
 use ointernal_parser::oracle::reader::ReaderError;
 use ointernal_parser::oracle::redo::MiscFlags;
 use ointernal_parser::oracle::timestamp::DateTime as OracleDateTime;
@@ -200,10 +200,10 @@ fn print_change(
     change: &ChangeAndVector,
 ) -> anyhow::Result<()> {
     println!(
-        "{} CON_ID:{} TYP:{} CLS:{} AFN:{} DBA:0x{:08x} OBJ:{} SCN:0x{:016x} SEQ:{} OP:{}.{} ENC:? RBL:? FLG:0x{:04x}",
+        "{} CON_ID:{} TYP:{} CLS:{} AFN:{} DBA:0x{:08x} OBJ:{} SCN:0x{:016x} SEQ:{} OP:{}.{} ENC:{} RBL:? FLG:0x{:04x}",
         format!("CHANGE #{i}").green(),
         change.change.cont_id,
-        change.change.type_,
+        change.change.type_.into_bits(),
         change.change.block_class,
         change.change.file_number,
         change.change.dba.0,
@@ -212,10 +212,22 @@ fn print_change(
         change.change.seq,
         change.change.layer,
         change.change.op,
+        if change.change.type_.encrypted() {
+            "1"
+        } else {
+            "0"
+        },
         change.change.flags,
     );
 
-    let printed = print_record(&change.parse()?)?;
+    let printed = match change.parse() {
+        Ok(o) => print_record(&o)?,
+        Err(OpDataError::Encrypted) => {
+            println!("{}", "CANNOT DUMP ENCRYPTED CHANGE!".bold().red());
+            true
+        }
+        Err(e) => return Err(e)?,
+    };
 
     if !printed || force_print_vector {
         for (i, v) in change.vector.iter().enumerate() {

@@ -1,3 +1,4 @@
+use bitfield_struct::bitfield;
 use bitflags::bitflags;
 use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout};
 
@@ -324,7 +325,16 @@ impl std::fmt::Debug for DBA {
     }
 }
 
-#[derive(KnownLayout, Immutable, FromBytes, Debug, Clone, Copy, PartialEq, Eq)]
+#[bitfield(u8)]
+#[derive(KnownLayout, Immutable, FromBytes)]
+pub struct ChangeType {
+    #[bits(7)]
+    unknown: u8,
+    #[bits(1)]
+    pub encrypted: bool,
+}
+
+#[derive(KnownLayout, Immutable, FromBytes, Debug, Clone, Copy)]
 #[repr(C)]
 pub struct Change {
     pub layer: u8,
@@ -337,14 +347,17 @@ pub struct Change {
 
     /// SEQ(Sequence number relative to SCN)
     pub seq: u8,
-    pub type_: u8,
+    pub type_: ChangeType,
     pub obj_low: u16,
     pub cont_id: u16,
 
     /// TODO clarify?
-    /// 0x200 -> `Missing endian conversion callback. Raw dump only.`
+    /// 0x8000 -> `Missing endian conversion callback. Raw dump only.`
     pub flags: u16,
+
+    /// #{AMND}
     _unknown_1: [u8; 4],
+
     pub change_list_len: u16,
     pub first_vector_size: u16,
     // rest change vector

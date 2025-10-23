@@ -14,6 +14,8 @@ pub enum OpDataError {
     UnrecognizedOp(u8, u8),
     #[error("{0:?}")]
     ConvertError(#[from] ConvertError),
+    #[error("change has been encrypted")]
+    Encrypted,
 }
 
 macro_rules! codes_for_layer {
@@ -96,7 +98,11 @@ macro_rules! codes_for_layer {
         // op data parsing
         impl ChangeAndVector {
             pub fn parse<'a>(&'a self) -> Result<Op<'a>, OpDataError> {
-                parse_impl(self.change.layer, self.change.op, &self.vector)
+                if self.change.type_.encrypted() {
+                    Err(OpDataError::Encrypted)
+                } else {
+                    parse_impl(self.change.layer, self.change.op, &self.vector)
+                }
             }
         }
 
