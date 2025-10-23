@@ -274,11 +274,11 @@ codes_for_layer! {
 
     Table = 11:
         /// undo row operation
-        UndoRowOperation = 1 !layers::layer11::InsertRowPiece,
+        UndoRowOperation = 1 !layers::layer11::KtbRedo,
         /// IRP insert row piece
-        InsertRowPiece = 2 !layers::layer11::InsertRowPiece,
+        InsertRowPiece = 2 !layers::layer11::KtbRedo,
         /// DRP delete row piece
-        DeleteRowPiece = 3,
+        DeleteRowPiece = 3 !layers::layer11::KtbRedo,
         /// lock row piece
         LockRowPiece = 4,
         /// URP update row piece

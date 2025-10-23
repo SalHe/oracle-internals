@@ -4,13 +4,16 @@ use num_traits::FromPrimitive;
 use zerocopy::{FromBytes, Immutable, KnownLayout};
 
 use crate::oracle::{
-    change::{ConvertError, VectorData, cv::FromCV, layers::Xid},
+    change::{
+        ConvertError, VectorData,
+        cv::FromCV,
+        layers::{Xid, layer4::BlockCleanOutRecord},
+    },
     redo::{DBA, UBA},
 };
 
 // -----------------------------------------------------------------------------
 
-/// KTB Redo
 #[derive(KnownLayout, Immutable, FromBytes, Debug)]
 #[repr(C)]
 pub struct RowOperation {
@@ -28,14 +31,25 @@ impl RowOperation {
             &self.rest
         };
 
+        self.b1.clean_out();
+
         let r = match self.b1.op() {
-            1 => Some(InsertRowPieceOpRest::F(FromBytes::ref_from_bytes(rest)?)),
+            1 => {
+                let (f, rest) = InsertRowPieceOpRestF::ref_from_prefix(rest)?;
+                let block_clean = if self.b1.clean_out() {
+                    Some(BlockCleanOutRecord::parse(rest)?)
+                } else {
+                    None
+                };
+
+                Some(InsertRowPieceOpRest::F { f, block_clean })
+            }
             2 => Some(InsertRowPieceOpRest::C(FromBytes::ref_from_bytes(rest)?)),
             3 => Some(InsertRowPieceOpRest::Z),
-            4 => todo!(),
-            5 => todo!(),
-            6 => todo!(),
-            8 => todo!(),
+            4 => Some(InsertRowPieceOpRest::L),
+            5 => Some(InsertRowPieceOpRest::R),
+            6 => Some(InsertRowPieceOpRest::N),
+            8 => Some(InsertRowPieceOpRest::G),
             _ => None,
         };
 
@@ -51,7 +65,10 @@ pub struct InsertRowPieceOpRestF {
 }
 
 pub enum InsertRowPieceOpRest<'a> {
-    F(&'a InsertRowPieceOpRestF),
+    F {
+        f: &'a InsertRowPieceOpRestF,
+        block_clean: Option<BlockCleanOutRecord<'a>>,
+    },
     C(&'a UBA),
     Z,
     L,
@@ -80,21 +97,6 @@ pub struct IRPByte1 {
 
     #[bits(3)]
     pub unknown: u8,
-}
-
-impl IRPByte1 {
-    pub fn op_ch(&self) -> Option<char> {
-        match self.op() {
-            1 => Some('F'),
-            2 => Some('C'),
-            3 => Some('Z'),
-            4 => Some('L'),
-            5 => Some('R'),
-            6 => Some('N'),
-            8 => Some('G'),
-            _ => None,
-        }
-    }
 }
 
 #[bitfield(u8)]
@@ -139,39 +141,37 @@ pub struct RPMeta {
 impl RPMeta {
     pub fn rest(&'_ self) -> Result<Option<RPMetaRest<'_>>, ConvertError> {
         let op = KdoOp::from_u8(self.op.op());
-        let op = if op.is_none() {
-            return Ok(None);
+        if let Some(op) = op {
+            let rest = match op {
+                KdoOp::IUR => RPMetaRest::IUR,
+                KdoOp::IRP => RPMetaRest::IRP(FromBytes::ref_from_bytes(&self.rest)?),
+                KdoOp::DRP => RPMetaRest::DRP(FromBytes::ref_from_bytes(&self.rest)?),
+                KdoOp::LKR => RPMetaRest::LKR,
+                KdoOp::URP => RPMetaRest::URP,
+                KdoOp::ORP => RPMetaRest::ORP,
+                KdoOp::MFC => RPMetaRest::MFC,
+                KdoOp::CFA => RPMetaRest::CFA,
+                KdoOp::CKI => RPMetaRest::CKI,
+                KdoOp::SKL => RPMetaRest::SKL,
+                KdoOp::QMI => RPMetaRest::QMI,
+                KdoOp::QMD => RPMetaRest::QMD,
+                KdoOp::DSC => RPMetaRest::DSC,
+                KdoOp::LMN => RPMetaRest::LMN,
+                KdoOp::LLB => RPMetaRest::LLB,
+                KdoOp::SHK => RPMetaRest::SHK,
+                KdoOp::CMP => RPMetaRest::CMP,
+                KdoOp::DCU => RPMetaRest::DCU,
+                KdoOp::MRK => RPMetaRest::MRK,
+                KdoOp::IRP2 => RPMetaRest::IRP2,
+                KdoOp::DRP2 => RPMetaRest::DRP2,
+                KdoOp::CMP2 => RPMetaRest::CMP2,
+                KdoOp::DGD => RPMetaRest::DGD,
+            };
+
+            Ok(Some(rest))
         } else {
-            op.unwrap()
-        };
-
-        let rest = match op {
-            KdoOp::IUR => RPMetaRest::IUR,
-            KdoOp::IRP => RPMetaRest::IRP(FromBytes::ref_from_bytes(&self.rest)?),
-            KdoOp::DRP => RPMetaRest::DRP(FromBytes::ref_from_bytes(&self.rest)?),
-            KdoOp::LKR => RPMetaRest::LKR,
-            KdoOp::URP => RPMetaRest::URP,
-            KdoOp::ORP => RPMetaRest::ORP,
-            KdoOp::MFC => RPMetaRest::MFC,
-            KdoOp::CFA => RPMetaRest::CFA,
-            KdoOp::CKI => RPMetaRest::CKI,
-            KdoOp::SKL => RPMetaRest::SKL,
-            KdoOp::QMI => RPMetaRest::QMI,
-            KdoOp::QMD => RPMetaRest::QMD,
-            KdoOp::DSC => RPMetaRest::DSC,
-            KdoOp::LMN => RPMetaRest::LMN,
-            KdoOp::LLB => RPMetaRest::LLB,
-            KdoOp::SHK => RPMetaRest::SHK,
-            KdoOp::CMP => RPMetaRest::CMP,
-            KdoOp::DCU => RPMetaRest::DCU,
-            KdoOp::MRK => RPMetaRest::MRK,
-            KdoOp::IRP2 => RPMetaRest::IRP2,
-            KdoOp::DRP2 => RPMetaRest::DRP2,
-            KdoOp::CMP2 => RPMetaRest::CMP2,
-            KdoOp::DGD => RPMetaRest::DGD,
-        };
-
-        Ok(Some(rest))
+            Ok(None)
+        }
     }
 }
 
@@ -356,13 +356,13 @@ pub struct IRPMetaByte2 {
 }
 
 #[derive(Debug)]
-pub struct InsertRowPiece<'a> {
+pub struct KtbRedo<'a> {
     v: &'a [VectorData],
     pub op: &'a RowOperation,
     pub meta: &'a RPMeta,
 }
 
-impl<'a> FromCV<'a> for InsertRowPiece<'a> {
+impl<'a> FromCV<'a> for KtbRedo<'a> {
     fn from_vectors(v: &'a [VectorData]) -> Result<Self, ConvertError> {
         Ok(Self {
             v,
@@ -372,7 +372,7 @@ impl<'a> FromCV<'a> for InsertRowPiece<'a> {
     }
 }
 
-impl InsertRowPiece<'_> {
+impl KtbRedo<'_> {
     const COL_DATA_BASE_INDEX: usize = 2;
 
     /// `VARCHAR(N)`: raw string bytes. 'AAAA' -> 41414141 (hex)

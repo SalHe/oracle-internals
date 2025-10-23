@@ -9,8 +9,8 @@ pub enum ConvertError {
     Alignment { got: usize },
     #[error("the conversion source was of incorrect size {got}.")]
     Size { got: usize },
-    #[error("the conversion source contained invalid data.")]
-    Validity,
+    #[error("the conversion source contained invalid data: {reason}.")]
+    Validity { reason: String },
 }
 
 impl<S, D: KnownLayout + ?Sized> From<zerocopy::CastError<&[S], D>> for ConvertError {
@@ -22,7 +22,9 @@ impl<S, D: KnownLayout + ?Sized> From<zerocopy::CastError<&[S], D>> for ConvertE
             zerocopy::ConvertError::Size(e) => ConvertError::Size {
                 got: e.into_src().len(),
             },
-            zerocopy::ConvertError::Validity(_) => ConvertError::Validity,
+            zerocopy::ConvertError::Validity(_) => ConvertError::Validity {
+                reason: "Infallible".to_string(),
+            },
         }
     }
 }

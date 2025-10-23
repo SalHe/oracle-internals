@@ -1,7 +1,7 @@
 use num_traits::FromPrimitive;
 use ointernal_parser::oracle::change::{
     Table,
-    layers::layer11::{self, InsertRowPiece},
+    layers::layer11::{self, KtbRedo},
 };
 
 use crate::dump::Dump;
@@ -11,12 +11,13 @@ impl Dump for Table<'_> {
         match self {
             Self::UndoRowOperation(Some(irp)) => irp.dump(),
             Self::InsertRowPiece(Some(irp)) => irp.dump(),
+            Self::DeleteRowPiece(Some(irp)) => irp.dump(),
             _ => Ok(false),
         }
     }
 }
 
-impl Dump for InsertRowPiece<'_> {
+impl Dump for KtbRedo<'_> {
     fn dump(&self) -> anyhow::Result<bool> {
         println!("KTB Redo ");
         println!(
@@ -39,10 +40,32 @@ impl Dump for InsertRowPiece<'_> {
 
         match self.op.rest()? {
             Some(r) => match r {
-                layer11::InsertRowPieceOpRest::F(f) => println!(
-                    "op: F  xid:  0x{:04x}.{:03x}.{:08x}    uba: 0x{:08x}.{:04x}.{:02x}",
-                    f.xid.usn, f.xid.slot, f.xid.sequence, f.uba.dba.0, f.uba.seq, f.uba.record,
-                ),
+                layer11::InsertRowPieceOpRest::F { f, block_clean } => {
+                    println!(
+                        "op: F  xid:  0x{:04x}.{:03x}.{:08x}    uba: 0x{:08x}.{:04x}.{:02x}",
+                        f.xid.usn, f.xid.slot, f.xid.sequence, f.uba.dba.0, f.uba.seq, f.uba.record,
+                    );
+                    if let Some(bc) = block_clean {
+                        println!(
+                            "Block cleanout record, scn:  0x{:016x} ver: 0x{:02x} opt: 0x{:02x} bigscn: {} compact: {} spare: 0x{:08x}, entries follow...",
+                            bc.head.scn.full_scn(),
+                            bc.head.flags.version(),
+                            bc.head.opt.into_bits(),
+                            if bc.head.flags.big_scn() { "Y" } else { "N" },
+                            if bc.head.flags.compact() { "Y" } else { "N" },
+                            bc.spare,
+                        );
+                        for e in bc.entries {
+                            println!(
+                                "  itli: {}  flg: (opt={} whr={})  scn:  0x{:016x}",
+                                e.itli,
+                                e.flag.opt(),
+                                e.flag.whr(),
+                                e.scn().full_scn(),
+                            );
+                        }
+                    }
+                }
                 layer11::InsertRowPieceOpRest::C(uba) => println!(
                     "op: C  uba: 0x{:08x}.{:04x}.{:02x}",
                     uba.dba.0, uba.seq, uba.record,
