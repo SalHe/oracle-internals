@@ -16,7 +16,7 @@ use ointernal_parser::oracle::{
     timestamp::OracleTimestamp,
 };
 
-trait DumpRedo {
+trait Dump {
     fn dump(&self) -> anyhow::Result<bool>;
 }
 

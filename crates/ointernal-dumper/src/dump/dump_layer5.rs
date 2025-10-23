@@ -5,9 +5,9 @@ use ointernal_parser::oracle::change::{
     },
 };
 
-use crate::dump::{DumpRedo, print_record};
+use crate::dump::{Dump, print_record};
 
-impl DumpRedo for TransactionUndoManagement<'_> {
+impl Dump for TransactionUndoManagement<'_> {
     fn dump(&self) -> anyhow::Result<bool> {
         match self {
             Self::UndoBlockRedo(Some(b)) => b.dump(),
@@ -22,7 +22,7 @@ fn yes_or_no(y: bool) -> &'static str {
     if y { "Yes" } else { "No" }
 }
 
-impl DumpRedo for UndoBlockRedo<'_> {
+impl Dump for UndoBlockRedo<'_> {
     fn dump(&self) -> anyhow::Result<bool> {
         println!(
             "ktudb redo: siz: {} spc: {} flg: 0x{:04x} seq: 0x{:04x} rec: 0x{:02x}",
@@ -104,13 +104,14 @@ impl DumpRedo for UndoBlockRedo<'_> {
         }
 
         if let Some(op) = &self.op {
+            println!("KDO undo record:");
             print_record(op)?;
         }
         Ok(true)
     }
 }
 
-impl DumpRedo for UndoHeaderRedo<'_> {
+impl Dump for UndoHeaderRedo<'_> {
     fn dump(&self) -> anyhow::Result<bool> {
         println!(
             "ktudh redo: slt: 0x{:04x} sqn: 0x{:08x} flg: 0x{:04x} siz: {} fbi: {}",
@@ -137,7 +138,7 @@ impl DumpRedo for UndoHeaderRedo<'_> {
     }
 }
 
-impl DumpRedo for ChangeTxSlotStatus<'_> {
+impl Dump for ChangeTxSlotStatus<'_> {
     fn dump(&self) -> anyhow::Result<bool> {
         print!(
             "ktucm redo: slt: 0x{:04x} sqn: 0x{:08x} srt: {} sta: {} flg: 0x{:x}",

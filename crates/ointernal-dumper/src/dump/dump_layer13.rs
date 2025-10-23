@@ -3,9 +3,9 @@ use ointernal_parser::oracle::change::{
     layers::layer13::{self, BlockFormat, BlockLinkModify, FreelistModify},
 };
 
-use crate::dump::DumpRedo;
+use crate::dump::Dump;
 
-impl DumpRedo for SegmentManagement<'_> {
+impl Dump for SegmentManagement<'_> {
     fn dump(&self) -> anyhow::Result<bool> {
         match self {
             Self::BlockFormatRedo(Some(b)) => b.dump(),
@@ -16,7 +16,7 @@ impl DumpRedo for SegmentManagement<'_> {
     }
 }
 
-impl DumpRedo for BlockFormat<'_> {
+impl Dump for BlockFormat<'_> {
     fn dump(&self) -> anyhow::Result<bool> {
         println!(
             "KTSFRBFMT (block format) redo: Segobjd: 0x{:08x} type: {} itls: {} cscn: 0x{:016x}",
@@ -29,7 +29,7 @@ impl DumpRedo for BlockFormat<'_> {
     }
 }
 
-impl DumpRedo for BlockLinkModify<'_> {
+impl Dump for BlockLinkModify<'_> {
     fn dump(&self) -> anyhow::Result<bool> {
         println!(
             "KTSFRBLNK (block link modify) redo:  Opcode: {}",
@@ -51,7 +51,7 @@ impl DumpRedo for BlockLinkModify<'_> {
     }
 }
 
-impl DumpRedo for FreelistModify<'_> {
+impl Dump for FreelistModify<'_> {
     fn dump(&self) -> anyhow::Result<bool> {
         println!("KTSFRGRP (fgb/shdr modify freelist) redo:");
         for one in &self.modifies {

@@ -1,5 +1,6 @@
 use bitfield_struct::bitfield;
 use num_derive::FromPrimitive;
+use num_traits::FromPrimitive;
 use zerocopy::{FromBytes, Immutable, KnownLayout};
 
 use crate::oracle::{
@@ -12,14 +13,14 @@ use crate::oracle::{
 /// KTB Redo
 #[derive(KnownLayout, Immutable, FromBytes, Debug)]
 #[repr(C)]
-pub struct InsertRowPieceOp {
+pub struct RowOperation {
     pub b1: IRPByte1,
     pub b2: IRPByte2,
     padding: [u8; 2],
     rest: [u8],
 }
 
-impl InsertRowPieceOp {
+impl RowOperation {
     pub fn rest(&'_ self) -> Result<Option<InsertRowPieceOpRest<'_>>, ConvertError> {
         let rest = if self.b2.start_from_8() {
             &self.rest[4..]
@@ -120,30 +121,63 @@ pub struct IRPByte2 {
 /// KDO Op code: ....
 #[derive(KnownLayout, Immutable, FromBytes, Debug)]
 #[repr(C)]
-pub struct InsertRowPieceMeta {
+pub struct RPMeta {
     pub bdba: DBA,
     pub hdba: DBA,
 
     pub maxfr: u16,
-    pub byte1: IRPMetaByte1,
+    pub op: IRPMetaByte1,
     pub xtype: IRPMetaByte2,
 
     pub itli: u8,
     pub ispac: u8,
     _unknown_1: [u8; 2],
 
-    /*
-    pub fwd: u32,
-    pub fwd_pos: u16,
-    pub bkw_low: u16,
-    pub bkw_high: u16,
-    pub bkw_pos: u16,
+    rest: [u8],
+}
 
-    pub flags: IRPMetaFlags,
-    pub lock: u8,
-    pub slot: u8,
-    _unknown_2: [u8; 9],
-    */
+impl RPMeta {
+    pub fn rest(&'_ self) -> Result<Option<RPMetaRest<'_>>, ConvertError> {
+        let op = KdoOp::from_u8(self.op.op());
+        let op = if op.is_none() {
+            return Ok(None);
+        } else {
+            op.unwrap()
+        };
+
+        let rest = match op {
+            KdoOp::IUR => RPMetaRest::IUR,
+            KdoOp::IRP => RPMetaRest::IRP(FromBytes::ref_from_bytes(&self.rest)?),
+            KdoOp::DRP => RPMetaRest::DRP(FromBytes::ref_from_bytes(&self.rest)?),
+            KdoOp::LKR => RPMetaRest::LKR,
+            KdoOp::URP => RPMetaRest::URP,
+            KdoOp::ORP => RPMetaRest::ORP,
+            KdoOp::MFC => RPMetaRest::MFC,
+            KdoOp::CFA => RPMetaRest::CFA,
+            KdoOp::CKI => RPMetaRest::CKI,
+            KdoOp::SKL => RPMetaRest::SKL,
+            KdoOp::QMI => RPMetaRest::QMI,
+            KdoOp::QMD => RPMetaRest::QMD,
+            KdoOp::DSC => RPMetaRest::DSC,
+            KdoOp::LMN => RPMetaRest::LMN,
+            KdoOp::LLB => RPMetaRest::LLB,
+            KdoOp::SHK => RPMetaRest::SHK,
+            KdoOp::CMP => RPMetaRest::CMP,
+            KdoOp::DCU => RPMetaRest::DCU,
+            KdoOp::MRK => RPMetaRest::MRK,
+            KdoOp::IRP2 => RPMetaRest::IRP2,
+            KdoOp::DRP2 => RPMetaRest::DRP2,
+            KdoOp::CMP2 => RPMetaRest::CMP2,
+            KdoOp::DGD => RPMetaRest::DGD,
+        };
+
+        Ok(Some(rest))
+    }
+}
+
+#[derive(KnownLayout, Immutable, FromBytes, Debug)]
+#[repr(C)]
+pub struct RPMetaIRP {
     pub fb_flags: IRPFbFlags,
     pub lb: u8,
     pub column_count: u8,
@@ -160,17 +194,47 @@ pub struct InsertRowPieceMeta {
     pub delta_size: u16,
     pub slot: u16,
     pub tabn: i8,
-    rest: [u8],
+    nulls: [u8],
 }
 
-impl InsertRowPieceMeta {
-    // pub fn fwd(&self) -> u32 {
-    //     (self.bkw_high as u32) << 16 | self.bkw_low as u32
-    // }
+#[derive(KnownLayout, Immutable, FromBytes, Debug)]
+#[repr(C)]
+pub struct RPMetaDRP {
+    pub slot: u16,
+    pub tabn: i8,
+    nulls: [u8],
+}
 
+pub enum RPMetaRest<'a> {
+    IUR,
+    IRP(&'a RPMetaIRP),
+    DRP(&'a RPMetaDRP),
+    LKR,
+    URP,
+    ORP,
+    MFC,
+    CFA,
+    CKI,
+    SKL,
+    QMI,
+    QMD,
+    DSC,
+    LMN,
+    LLB,
+    SHK,
+    CMP,
+    DCU,
+    MRK,
+    IRP2,
+    DRP2,
+    CMP2,
+    DGD,
+}
+
+impl RPMetaIRP {
     pub fn is_col_null(&self, col: u8) -> Option<bool> {
         if col < self.column_count {
-            Some((self.rest[(col as usize) / 8] >> (col % 8)) & 1 != 0)
+            Some((self.nulls[(col as usize) / 8] >> (col % 8)) & 1 != 0)
         } else {
             None
         }
@@ -294,28 +358,16 @@ pub struct IRPMetaByte2 {
 #[derive(Debug)]
 pub struct InsertRowPiece<'a> {
     v: &'a [VectorData],
-    pub op: &'a InsertRowPieceOp,
-    pub meta: &'a InsertRowPieceMeta,
+    pub op: &'a RowOperation,
+    pub meta: &'a RPMeta,
 }
 
 impl<'a> FromCV<'a> for InsertRowPiece<'a> {
     fn from_vectors(v: &'a [VectorData]) -> Result<Self, ConvertError> {
-        const FAKE: (u64, [u8; 48]) = (
-            0,
-            [0u8; /* std::mem::size_of::<InsertRowPieceMeta>() >= */ _],
-        );
-
-        let meta: &'a InsertRowPieceMeta = if v[1].data.len() >= FAKE.1.len() {
-            FromBytes::ref_from_bytes(&v[1].data)?
-        } else {
-            // TODO other kinds of InsertRowPieceMeta
-            FromBytes::ref_from_bytes(&FAKE.1)?
-        };
-
         Ok(Self {
             v,
             op: FromBytes::ref_from_bytes(&v[0].data)?,
-            meta,
+            meta: FromBytes::ref_from_bytes(&v[1].data)?,
         })
     }
 }
@@ -325,8 +377,8 @@ impl InsertRowPiece<'_> {
 
     /// `VARCHAR(N)`: raw string bytes. 'AAAA' -> 41414141 (hex)
     /// `NUMBER`: [crate::oracle::types::get_number_from_bytes]
-    pub fn col_data(&self, col: usize) -> Option<Option<&'_ [u8]>> {
-        self.meta.is_col_null(col as _).map(|is_null| {
+    pub fn col_data(&self, meta: &RPMetaIRP, col: usize) -> Option<Option<&'_ [u8]>> {
+        meta.is_col_null(col as _).map(|is_null| {
             if is_null {
                 None
             } else {

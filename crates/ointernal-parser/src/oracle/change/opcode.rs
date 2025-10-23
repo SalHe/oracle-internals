@@ -274,7 +274,7 @@ codes_for_layer! {
 
     Table = 11:
         /// undo row operation
-        UndoRowOperation = 1 !layers::layer11::InsertRowPiece, // TODO what's the type? it's similar with 11.2
+        UndoRowOperation = 1 !layers::layer11::InsertRowPiece,
         /// IRP insert row piece
         InsertRowPiece = 2 !layers::layer11::InsertRowPiece,
         /// DRP delete row piece
