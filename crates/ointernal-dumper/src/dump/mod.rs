@@ -166,7 +166,7 @@ fn print_header_info(fh: &FileHeaderBlock, rh: &RedoFileHead) {
     println!();
 }
 
-fn print_record_head(i: usize, rba: RBA, head: &RedoRecordHeadCommon, ts: OracleTimestamp) {
+fn print_record_head(i: usize, rba: &RBA, head: &RedoRecordHeadCommon, ts: OracleTimestamp) {
     println!(
         "{} - Thread:? RBA: 0x{:06x}.{:08x}.{:04x} LEN: 0x{:04x} VLD: 0x{:02x} CON_UID: {}",
         format!("REDO RECORD#{i}").bold().green(),
@@ -178,14 +178,10 @@ fn print_record_head(i: usize, rba: RBA, head: &RedoRecordHeadCommon, ts: Oracle
         head.con_uid,
     );
     println!(
-        "SCN: 0x{:016x} SUBSCN: {} {}",
+        "SCN: 0x{:016x} SUBSCN:  {} {}",
         head.scn().full_scn(),
         head.sub_scn,
         OracleDateTime::from(ts),
-    );
-    println!(
-        "(LWN RBA: 0x{:06x}.{:08x}.{:04x} LEN: 0x???????? NST: 0x???? SCN: 0x????????????????)",
-        rba.seq, rba.block_id, rba.offset,
     );
 }
 
@@ -261,8 +257,17 @@ pub fn read_redo(file: PathBuf, force_print_vector: bool) -> anyhow::Result<()> 
     while let Some((rba, record)) = eof_return_ok!(reader.begin_read_record())? {
         println!();
         match record {
-            Record::V1(v1) => print_record_head(i_record, rba, &v1.common, OracleTimestamp(0)),
-            Record::V2(v2) => print_record_head(i_record, rba, &v2.common, v2.begin_time),
+            Record::V1(v1) => print_record_head(i_record, &rba, &v1.common, OracleTimestamp(0)),
+            Record::V2(v2) => {
+                print_record_head(i_record, &rba, &v2.common, v2.begin_time);
+                println!(
+                    "(LWN RBA: 0x{:06x}.{:08x}.{:04x} LEN: 0x???????? NST: 0x???? SCN: 0x{:016x})",
+                    rba.seq,
+                    rba.block_id,
+                    rba.offset,
+                    v2.lwn_scn.full_scn(),
+                );
+            }
         }
 
         let mut i_change = 1usize;

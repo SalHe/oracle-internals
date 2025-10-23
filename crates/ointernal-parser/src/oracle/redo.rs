@@ -258,7 +258,26 @@ impl RedoRecordHeadCommon {
 #[repr(C)]
 pub struct RedoRecordHeadV2 {
     pub common: RedoRecordHeadCommon,
-    _unknown_1: [u8; 40],
+    /// #{AMND}
+    _unknown_2: [u8; 2],
+
+    /// #{AME} ORA-00356: inconsistent lengths in change description
+    /// ORA-00353: log corruption near block 2 change 16423452 time 10/22/2025 12:01:45
+    /// ORA-00334: archived log: '...'
+    _unknown_1: [u8; 10],
+
+    /// #{AME}: 0A->FF
+    ///    oracledb.exceptions.DatabaseError: DPY-4011: the database or network closed the connection
+    ///    ORA-00600: internal error code, arguments: [krr_parse_redo_zcredo], [], [], [], [], [], [], [], [], [], [], []
+    _unknown_4: u8,
+
+    /// #{AMND}
+    _unknown_3: [u8; 3],
+
+    /// TODO if modified, may be hidden? when?
+    pub lwn_scn: Scn,
+
+    _unknown_5: [u8; 14],
     pub begin_time: OracleTimestamp,
 }
 
