@@ -21,7 +21,7 @@ impl Dump for KtbRedo<'_> {
     fn dump(&self) -> anyhow::Result<bool> {
         println!("KTB Redo ");
         println!(
-            "op: 0x{:02}  ver: 0x{:02}  ",
+            "op: 0x{:02x}  ver: 0x{:02x}  ",
             self.op.b1.into_bits(), // display byte1, not only op code's bitfields
             self.op.b2.version(),
         );
