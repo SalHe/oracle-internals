@@ -1,5 +1,6 @@
+use std::fmt::Display;
+
 use bitfield_struct::bitfield;
-use bitflags::bitflags;
 use zerocopy::{FromBytes, Immutable, IntoBytes, KnownLayout};
 
 use crate::oracle::{change::Op, scn::Scn, timestamp::OracleTimestamp};
@@ -77,7 +78,7 @@ pub struct RedoFileHead {
     _unknown_4: [u8; 4],
 
     /// MiscFlags
-    pub misc_flags: u32,
+    pub misc_flags: MiscFlags,
 
     pub terminal_recovery_stop_scn: Scn,
     pub terminal_recovery_timestamp: OracleTimestamp,
@@ -139,59 +140,56 @@ impl RedoFileHead {
     }
 }
 
-bitflags! {
-    pub struct MiscFlags: u32 {
-        /// End-of-redo stream
-        const END_OF_STREAM = 0x8;
+#[bitfield(u32)]
+#[derive(KnownLayout, Immutable, FromBytes)]
+pub struct MiscFlags {
+    #[bits(3)]
+    __: u32,
 
-        /// Archivelog created using asynchronous network transmittal
-        const ASYNC_ARCH = 0x100;
+    pub end_of_stream: bool,
 
-        /// No data-loss mode
-        const NO_LOSS_DATA_MODE = 0x200;
+    #[bits(4)]
+    __: u32,
 
-        /// Resynchronization mode
-        const RESYNCHRONIZATION_MODE = 0x800;
+    pub async_arch: bool,
+    pub no_loss_data_mode: bool,
+    __: bool,
+    pub resynchronization_mode: bool,
+    pub close_thread_archival: bool,
+    pub max_performance_mode: bool,
+    #[bits(2)]
+    __: u32,
+    pub failover: bool,
+    __: bool,
+    pub sync_no_affirm_no_data_loss_mode: bool,
 
-        /// Closed thread archival
-        const CLOSE_THREAD_ARCHIVAL = 0x1000;
-
-        /// Maximize performance mode
-        const MAX_PERFORMANCE_MODE = 0x2000;
-
-        /// Failover
-        const FAILOVER = 0x10000;
-
-        /// Sync NoAffirm No data-loss mode
-        const SYNC_NO_AFFIRM_NO_DATA_LOSS_MODE = 0x40000;
-
-        const _ = !0;
-    }
+    #[bits(13)]
+    __: u32,
 }
 
 impl MiscFlags {
     pub fn protected_mode(&self) -> String {
-        if self.contains(MiscFlags::NO_LOSS_DATA_MODE) {
+        if self.no_loss_data_mode() {
             return "No data-loss mode".into();
         }
 
         let mut mode = Vec::new();
-        if self.contains(MiscFlags::SYNC_NO_AFFIRM_NO_DATA_LOSS_MODE) {
+        if self.sync_no_affirm_no_data_loss_mode() {
             mode.push("Sync NoAffirm No data-loss mode");
-        } else if self.contains(MiscFlags::RESYNCHRONIZATION_MODE) {
+        } else if self.resynchronization_mode() {
             mode.push("Resynchronization mode");
         } else {
             mode.push("Unprotected mode");
-            if self.contains(MiscFlags::MAX_PERFORMANCE_MODE) {
+            if self.max_performance_mode() {
                 mode.push("Maximize performance mode");
             }
         }
 
-        if self.contains(MiscFlags::CLOSE_THREAD_ARCHIVAL) {
+        if self.close_thread_archival() {
             mode.push("Closed thread archival");
         }
 
-        if self.contains(MiscFlags::ASYNC_ARCH) {
+        if self.async_arch() {
             mode.push("Archivelog created using asynchronous network transmittal");
         }
 
@@ -199,23 +197,23 @@ impl MiscFlags {
     }
 }
 
-bitflags! {
-    #[derive(Debug)]
-    pub struct VldFlags: u8 {
-        const KCRVALID = 0x01;
-        const KCRDEPND = 0x02;
-        const KCRVOID = 0x04;
-        const KCRNMARK = 0x08;
-        const KCRORDER = 0x10;
-        const _ = !0;
-    }
+#[bitfield(u8)]
+#[derive(KnownLayout, Immutable, FromBytes)]
+pub struct VldFlags {
+    pub kcr_valid: bool,
+    pub kcr_depend: bool,
+    pub kcr_void: bool,
+    pub kcr_nmark: bool,
+    pub kcr_order: bool,
+    #[bits(3)]
+    unknown: u8,
 }
 
 #[derive(KnownLayout, Immutable, FromBytes, Debug, Clone, Copy)]
 #[repr(C)]
 pub struct RedoRecordHeadCommon {
     pub len: u32,
-    pub vld: u8,
+    pub vld: VldFlags,
 
     /// #{AMND} padding?
     _unknown_1: u8,
@@ -298,30 +296,25 @@ pub struct UBA {
     _unknown: u8,
 }
 
-/// Data Block Address
-#[derive(KnownLayout, Immutable, FromBytes, Clone, Copy, PartialEq, Eq)]
-#[repr(transparent)]
-pub struct DBA(pub u32);
-
-impl DBA {
-    pub fn block_id(&self) -> u32 {
-        self.0 & 0x003F_FFFF
-    }
-
-    pub fn relative_file_number(&self) -> u32 {
-        (self.0 & 0xFFC0_0000) >> 22
+impl Display for UBA {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}.{:04x}.{:02x}", self.dba, self.seq, self.record,)
     }
 }
 
-impl std::fmt::Debug for DBA {
+/// Data Block Address
+#[bitfield(u32)]
+#[derive(KnownLayout, Immutable, FromBytes, PartialEq, Eq)]
+pub struct DBA {
+    #[bits(22)]
+    pub block_id: u32,
+    #[bits(10)]
+    pub relative_file_number: u32,
+}
+
+impl Display for DBA {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "DBA(block_id: {}, file_number: {})={:x}",
-            self.block_id(),
-            self.relative_file_number(),
-            self.0,
-        )
+        write!(f, "0x{:08x}", self.0)
     }
 }
 

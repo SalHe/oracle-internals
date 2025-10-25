@@ -7,7 +7,6 @@ use std::path::PathBuf;
 use colored::Colorize;
 use ointernal_parser::oracle::change::{ChangeAndVector, Op, OpDataError};
 use ointernal_parser::oracle::reader::ReaderError;
-use ointernal_parser::oracle::redo::MiscFlags;
 use ointernal_parser::oracle::timestamp::DateTime as OracleDateTime;
 use ointernal_parser::oracle::{
     file::FileHeaderBlock,
@@ -113,17 +112,16 @@ fn print_header_info(fh: &FileHeaderBlock, rh: &RedoFileHead) {
     );
     println!(" Largest LWN: {} blocks", rh.largest_lwn);
 
-    let flags = MiscFlags::from_bits(rh.misc_flags).unwrap();
     println!(
         " End-of-redo stream : {}",
-        if flags.contains(MiscFlags::END_OF_STREAM) {
+        if rh.misc_flags.end_of_stream() {
             "Yes"
         } else {
             "No"
         }
     );
-    println!(" {}", flags.protected_mode());
-    println!(" Miscellaneous flags: 0x{:08x}", rh.misc_flags);
+    println!(" {}", rh.misc_flags.protected_mode());
+    println!(" Miscellaneous flags: 0x{:08x}", rh.misc_flags.into_bits());
     println!(" Miscellaneous second flags: 0x{:x}", rh.misc_flags2);
     println!(
         " Thread internal enable indicator: thr: {}, seq: {} scn: 0x{:016x}",
@@ -174,7 +172,7 @@ fn print_record_head(i: usize, rba: &RBA, head: &RedoRecordHeadCommon, ts: Oracl
         rba.block_id,
         rba.offset,
         head.len,
-        head.vld,
+        head.vld.into_bits(),
         head.con_uid,
     );
     println!(
@@ -200,13 +198,13 @@ fn print_change(
     change: &ChangeAndVector,
 ) -> anyhow::Result<()> {
     println!(
-        "{} CON_ID:{} TYP:{} CLS:{} AFN:{} DBA:0x{:08x} OBJ:{} SCN:0x{:016x} SEQ:{} OP:{}.{} ENC:{} RBL:? FLG:0x{:04x}",
+        "{} CON_ID:{} TYP:{} CLS:{} AFN:{} DBA:{} OBJ:{} SCN:0x{:016x} SEQ:{} OP:{}.{} ENC:{} RBL:? FLG:0x{:04x}",
         format!("CHANGE #{i}").green(),
         change.change.cont_id,
         change.change.type_.into_bits(),
         change.change.block_class,
         change.change.file_number,
-        change.change.dba.0,
+        change.change.dba,
         change.change.obj(),
         change.change.scn.full_scn(),
         change.change.seq,

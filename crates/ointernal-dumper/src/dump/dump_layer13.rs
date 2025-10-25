@@ -43,10 +43,7 @@ impl Dump for BlockLinkModify<'_> {
                 None => "???",
             }
         );
-        println!(
-            "Next dba: 0x{:08x} itli: {}",
-            self.data.dba.0, self.data.itli
-        );
+        println!("Next dba: {} itli: {}", self.data.dba, self.data.itli);
         Ok(true)
     }
 }

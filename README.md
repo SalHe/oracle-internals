@@ -16,7 +16,3 @@
 
 - AMND(After modified, and dump it, no any difference.): 将二进制文件修改后，重新dump，未发现结果变化（无法通过此方法确认字节的含义）
 - AME(After modified, and dump it, error occurred.): 将二进制文件修改后，重新dump，数据库报错（修改的内容以及错误会具体进行说明）
-
-## TODOs
-
-- [ ] Replace `bitflags` with `bitfields` for better struct declaration and expression.

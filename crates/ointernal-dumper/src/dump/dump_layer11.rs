@@ -42,8 +42,8 @@ impl Dump for KtbRedo<'_> {
             Some(r) => match r {
                 layer11::InsertRowPieceOpRest::F { f, block_clean } => {
                     println!(
-                        "op: F  xid:  0x{:04x}.{:03x}.{:08x}    uba: 0x{:08x}.{:04x}.{:02x}",
-                        f.xid.usn, f.xid.slot, f.xid.sequence, f.uba.dba.0, f.uba.seq, f.uba.record,
+                        "op: F  xid:  0x{:04x}.{:03x}.{:08x}    uba: {}",
+                        f.xid.usn, f.xid.slot, f.xid.sequence, f.uba,
                     );
                     if let Some(bc) = block_clean {
                         println!(
@@ -66,10 +66,7 @@ impl Dump for KtbRedo<'_> {
                         }
                     }
                 }
-                layer11::InsertRowPieceOpRest::C(uba) => println!(
-                    "op: C  uba: 0x{:08x}.{:04x}.{:02x}",
-                    uba.dba.0, uba.seq, uba.record,
-                ),
+                layer11::InsertRowPieceOpRest::C(uba) => println!("op: C  uba: {}", uba),
                 layer11::InsertRowPieceOpRest::Z => println!("op: Z"),
                 layer11::InsertRowPieceOpRest::L => println!("op: L ??????????????TODO"),
                 layer11::InsertRowPieceOpRest::R => println!("op: R ??????????????TODO"),
@@ -94,7 +91,7 @@ impl Dump for KtbRedo<'_> {
                 }
             );
             println!(
-                "  xtype: {} flags: 0x{:08x}  bdba: 0x{:08x}  hdba: 0x{:08x}",
+                "  xtype: {} flags: 0x{:08x}  bdba: {}  hdba: {}",
                 match layer11::IRPXtype::from_u8(self.meta.xtype.typ()) {
                     Some(xt) => match xt {
                         layer11::IRPXtype::XA => "XA",
@@ -105,8 +102,8 @@ impl Dump for KtbRedo<'_> {
                     None => format!("{}", self.meta.xtype.typ()),
                 },
                 self.meta.xtype.with_typ(0).into_bits(), // clear type, flags remained
-                self.meta.bdba.0,
-                self.meta.hdba.0,
+                self.meta.bdba,
+                self.meta.hdba,
             );
             println!(
                 "itli: {}  ispac: {}  maxfr: {}",

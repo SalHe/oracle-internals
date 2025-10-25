@@ -22,7 +22,6 @@ pub struct BlockCleanOutRecordHead {
 pub struct BlockCleanOutRecordOpt {
     #[bits(4)]
     unknown_1: u8,
-    #[bits(1)]
     contains_entries: bool,
     #[bits(3)]
     unknown_2: u8,

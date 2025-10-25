@@ -15,7 +15,7 @@ use crate::oracle::{
     file::{FileHeader, FileHeaderBlock},
     redo::{
         Change, RedoBlockHead, RedoFileHead, RedoRecordHeadCommon, RedoRecordHeadV1,
-        RedoRecordHeadV2, VldFlags,
+        RedoRecordHeadV2,
     },
 };
 
@@ -225,10 +225,8 @@ impl RedoFileReader {
                 offset: self.offset_in_block as _,
             };
 
-            let flags = VldFlags::from_bits(record.vld).unwrap();
-            trace!(?flags);
-            let vld = flags;
-            if vld.contains(VldFlags::KCRVOID) {
+            trace!(?record.vld);
+            if record.vld.kcr_void() {
                 let v2 = RedoRecordHeadV2::ref_from_bytes(
                     &self.curr_block[self.offset_in_block
                         ..(self.offset_in_block + std::mem::size_of::<RedoRecordHeadV2>())],
@@ -260,7 +258,9 @@ impl RedoFileReader {
 
     #[tracing::instrument(skip(self, target))]
     pub fn read_content(&mut self, target: &mut [u8]) -> Result<(), ReaderError> {
-        self.curr_record.ok_or(ReaderError::NotReadingRecord)?;
+        if self.curr_record.is_none() {
+            return Err(ReaderError::NotReadingRecord);
+        }
 
         let expected_size = target.len();
         let block_crossed =

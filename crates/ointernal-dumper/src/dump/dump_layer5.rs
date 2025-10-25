@@ -33,7 +33,7 @@ impl Dump for UndoBlockRedo<'_> {
             self.data.xid.usn, self.data.xid.slot, self.data.xid.sequence,
         );
         println!(
-            "ktub{} redo: slt: {} wrp: {} flg: 0x{:04x} prev dba:  0x{:08x} rci: {} opc: {}.{} [objn: {} objd: {} tsn: {}]",
+            "ktub{} redo: slt: {} wrp: {} flg: 0x{:04x} prev dba:  {} rci: {} opc: {}.{} [objn: {} objd: {} tsn: {}]",
             if self.data2.flags.is_ktubl() {
                 "l"
             } else {
@@ -42,7 +42,7 @@ impl Dump for UndoBlockRedo<'_> {
             self.data2.slot,
             self.data2.wrap,
             self.data2.flags.into_bits(),
-            self.data2.dba.0,
+            self.data2.dba,
             self.data2.rci,
             self.data2.record_layer_code,
             self.data2.record_op_code,
@@ -72,10 +72,8 @@ impl Dump for UndoBlockRedo<'_> {
         let print_common = |c: &UndoBlockRedoData2CommonRest| {
             println!("Begin trans    ");
             println!(
-                " prev ctl uba: 0x{:08x}.{:04x}.{:02x} prev ctl max cmt scn:  0x{:016x} ",
-                c.prev_ctl_uba.dba.0,
-                c.prev_ctl_uba.seq,
-                c.prev_ctl_uba.record,
+                " prev ctl uba: {} prev ctl max cmt scn:  0x{:016x} ",
+                c.prev_ctl_uba,
                 c.prev_ctl_max_cmt_scn.full_scn(),
             );
             println!(
@@ -122,10 +120,8 @@ impl Dump for UndoHeaderRedo<'_> {
             self.data.fbi,
         );
         print!(
-            "            uba: 0x{:08x}.{:04x}.{:02x}    pxid:  0x{:04x}.{:03x}.{:08x}",
-            self.data.uba.dba.0,
-            self.data.uba.seq,
-            self.data.uba.record,
+            "            uba: {}    pxid:  0x{:04x}.{:03x}.{:08x}",
+            self.data.uba,
             self.data.parent_xid.usn,
             self.data.parent_xid.slot,
             self.data.parent_xid.sequence,
@@ -147,8 +143,8 @@ impl Dump for ChangeTxSlotStatus<'_> {
 
         if let Some(d) = self.data2 {
             print!(
-                " ktucf redo: uba: 0x{:08x}.{:04x}.{:02x} ext: {} spc: {} fbi: {} ",
-                d.uba.dba.0, d.uba.seq, d.uba.record, d.ext, d.spc, d.fbi
+                " ktucf redo: uba: {} ext: {} spc: {} fbi: {} ",
+                d.uba, d.ext, d.spc, d.fbi
             );
         }
 

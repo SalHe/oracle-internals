@@ -85,12 +85,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bitflags"
-version = "2.9.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2261d10cca569e4643e526d8dc2e62e433cc8aba21ab764233731f8d369bf394"
-
-[[package]]
 name = "cfg-if"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -243,7 +237,6 @@ name = "ointernal-parser"
 version = "0.1.0"
 dependencies = [
  "bitfield-struct",
- "bitflags",
  "num-derive",
  "num-traits",
  "thiserror",
