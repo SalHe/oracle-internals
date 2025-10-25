@@ -1,0 +1,7 @@
+container:
+  name: oracle-internal-db
+  image: limslee/oracle-database:19c-ee
+  ready-tag: DATABASE IS READY TO USE!
+  db-password: "123456"
+outputs:
+  dumped: ./out/dumped
