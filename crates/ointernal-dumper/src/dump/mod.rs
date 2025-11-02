@@ -229,20 +229,42 @@ fn print_change(
 
     if !printed || force_print_vector {
         for (i, v) in change.vector.iter().enumerate() {
-            println!(
-                " {} {}",
-                format!(
-                    "vector#{i}[{}{}]",
-                    v.size,
-                    if v.size == v.data.len() as _ {
-                        "".to_string()
-                    } else {
-                        format!("+{}", v.data.len() as u64 - v.size)
-                    }
-                )
-                .underline(),
-                hex::encode(&v.data)
-            );
+            let header = format!(
+                "vector#{i}[{}{}]",
+                v.size,
+                if v.size == v.data.len() as _ {
+                    "".to_string()
+                } else {
+                    format!("+{}", v.data.len() as u64 - v.size)
+                }
+            )
+            .underline();
+            print!(" {}", header);
+            let ident = if v.ranges.len() > 1 {
+                println!(
+                    "\t{} {}",
+                    format!("CROSSED BLOCK({} pieces)", v.ranges.len())
+                        .bold()
+                        .red(),
+                    hex::encode(&v.data)
+                );
+                format!("{}\t", " ".repeat(header.len()))
+            } else {
+                "\t".to_string()
+            };
+
+            let mut rest = &v.data[0..];
+            for r in &v.ranges {
+                let curr;
+                (curr, rest) = rest.split_at((r.end - r.start) as _);
+                println!(
+                    "{}0x{:08X}..0x{:08X}: {}",
+                    ident,
+                    r.start,
+                    r.end,
+                    hex::encode(&curr)
+                );
+            }
         }
     }
 

@@ -1,3 +1,5 @@
+use std::ops::Range;
+
 use thiserror::Error;
 use zerocopy::KnownLayout;
 
@@ -49,4 +51,7 @@ pub struct VectorData {
 
     /// Actual size of vector data (padding exclusive.)
     pub size: u64,
+
+    /// Offsets of data from original redo file.
+    pub ranges: Vec<Range<u64>>,
 }

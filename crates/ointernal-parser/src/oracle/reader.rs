@@ -2,6 +2,7 @@ use std::{
     cmp::min,
     fs::File,
     io::{ErrorKind, Read, Seek},
+    ops::Range,
     path::Path,
 };
 
@@ -257,7 +258,7 @@ impl RedoFileReader {
     }
 
     #[tracing::instrument(skip(self, target))]
-    pub fn read_content(&mut self, target: &mut [u8]) -> Result<(), ReaderError> {
+    fn read_content(&mut self, target: &mut [u8]) -> Result<Vec<Range<u64>>, ReaderError> {
         if self.curr_record.is_none() {
             return Err(ReaderError::NotReadingRecord);
         }
@@ -267,6 +268,7 @@ impl RedoFileReader {
             self.offset_in_block + expected_size >= self.file_header().header.block_size as usize;
         trace!(expected_size, block_crossed, "begin read data");
 
+        let mut ranges = Vec::new();
         if block_crossed {
             let mut rest = expected_size;
             while rest > 0 {
@@ -274,6 +276,11 @@ impl RedoFileReader {
                     self.file_header().header.block_size as usize - self.offset_in_block,
                     rest,
                 );
+
+                let begin = self.offset_in_block as u64
+                    + (self.file_header().header.block_size as u64)
+                        * (self.curr_block_head().id as u64);
+                ranges.push(begin..(begin + can_read as u64));
                 trace!(
                     block_id = self.curr_block_head().id,
                     self.content_offset, self.offset_in_block, can_read, "read slice of data",
@@ -301,10 +308,15 @@ impl RedoFileReader {
                 &self.curr_block[self.offset_in_block..(self.offset_in_block + expected_size)],
             );
             self.offset_in_block += expected_size;
+
+            let begin = self.offset_in_block as u64
+                + (self.file_header().header.block_size as u64)
+                    * (self.curr_block_head().id as u64);
+            ranges.push(begin..(begin + expected_size as u64));
         }
 
         self.content_offset += expected_size;
-        Ok(())
+        Ok(ranges)
     }
 
     #[tracing::instrument(skip(self))]
@@ -326,7 +338,7 @@ impl RedoFileReader {
 
         trace!("reading change");
         let mut change_buffer = vec![0u8; std::mem::size_of::<Change>()];
-        self.read_content(&mut change_buffer)?;
+        _ = self.read_content(&mut change_buffer)?;
 
         let change = *Change::ref_from_bytes(&change_buffer).unwrap();
         trace!(?change, "change read");
@@ -339,7 +351,7 @@ impl RedoFileReader {
         for i in 1..change.vector_count() {
             trace!(vector_id = i, "reading vector data size");
             let mut buffer = [0u8; 2];
-            self.read_content(&mut buffer)?;
+            _ = self.read_content(&mut buffer)?;
             vector_size.push(u16::from_le_bytes(buffer));
         }
         trace!(?vector_size);
@@ -356,10 +368,11 @@ impl RedoFileReader {
             trace!(vector_id = i, "reading vector data content");
             let actual_size = *size as u64;
             let mut buffer = vec![0u8; padding_size(actual_size, 4) as usize];
-            self.read_content(&mut buffer)?;
+            let ranges = self.read_content(&mut buffer)?;
             vector_data.push(VectorData {
                 data: buffer,
                 size: actual_size,
+                ranges,
             });
         }
 
