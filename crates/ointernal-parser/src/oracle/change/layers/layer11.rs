@@ -139,7 +139,10 @@ pub struct RPMeta {
 }
 
 impl RPMeta {
-    pub fn rest(&'_ self) -> Result<Option<RPMetaRest<'_>>, ConvertError> {
+    pub(crate) fn rest<'a>(
+        &'a self,
+        v: &'a [VectorData],
+    ) -> Result<Option<RPMetaRest<'a>>, ConvertError> {
         let op = KdoOp::from_u8(self.op.op());
         if let Some(op) = op {
             let rest = match op {
@@ -155,7 +158,23 @@ impl RPMeta {
                 KdoOp::SKL => RPMetaRest::SKL,
                 KdoOp::QMI => RPMetaRest::QMI,
                 KdoOp::QMD => RPMetaRest::QMD,
+                KdoOp::ArrayUpdate => {
+                    const SINGLE_SIZE: usize = 28; // TODO how to determine size of single entry?
+                    let row_count = *u32::ref_from_bytes(&self.rest)?;
+                    let rows = v[0]
+                        .data
+                        .chunks_exact(SINGLE_SIZE)
+                        .map(|x| -> Result<RPMetaWrapper<'_>, ConvertError> {
+                            Ok(RPMetaWrapper {
+                                meta: RPMeta::ref_from_bytes(x)?,
+                                v: &v[1..], // columns' data is saved in single vector, and shared across different UPDATEs.
+                            })
+                        })
+                        .collect::<Result<Vec<_>, _>>()?;
+                    RPMetaRest::ArrayUpdate(RPMeta19 { row_count, rows })
+                }
                 KdoOp::DSC => RPMetaRest::DSC,
+                KdoOp::ArrayUpdateContinue => RPMetaRest::ArrayUpdateContinue,
                 KdoOp::LMN => RPMetaRest::LMN,
                 KdoOp::LLB => RPMetaRest::LLB,
                 KdoOp::SHK => RPMetaRest::SHK,
@@ -172,6 +191,31 @@ impl RPMeta {
         } else {
             Ok(None)
         }
+    }
+}
+
+#[derive(Debug)]
+pub struct RPMetaWrapper<'a> {
+    pub meta: &'a RPMeta,
+    v: &'a [VectorData],
+}
+
+impl RPMetaWrapper<'_> {
+    pub fn rest(&self) -> Result<Option<RPMetaRest<'_>>, ConvertError> {
+        self.meta.rest(self.v)
+    }
+
+    /// `VARCHAR(N)`: raw string bytes. 'AAAA' -> 41414141 (hex)
+    /// `NUMBER`: [crate::oracle::types::get_number_from_bytes]
+    pub fn col_data(&self, meta: &RPMetaIRP, col: usize) -> Option<Option<&'_ [u8]>> {
+        meta.is_col_null(col as _).map(|is_null| {
+            if is_null {
+                None
+            } else {
+                let i = col;
+                Some(&self.v[i].data[..(self.v[i].size as _)])
+            }
+        })
     }
 }
 
@@ -205,6 +249,13 @@ pub struct RPMetaDRP {
     nulls: [u8],
 }
 
+#[derive(KnownLayout, Immutable, FromBytes, Debug)]
+#[repr(C)]
+pub struct RPMeta19<'a> {
+    pub row_count: u32,
+    pub rows: Vec<RPMetaWrapper<'a>>,
+}
+
 pub enum RPMetaRest<'a> {
     IUR,
     IRP(&'a RPMetaIRP),
@@ -218,7 +269,9 @@ pub enum RPMetaRest<'a> {
     SKL,
     QMI,
     QMD,
+    ArrayUpdate(RPMeta19<'a>),
     DSC,
+    ArrayUpdateContinue,
     LMN,
     LLB,
     SHK,
@@ -304,7 +357,12 @@ pub enum KdoOp {
     DSC = 0x0E,
     LMN = 0x10,
     LLB = 0x11,
+
+    ArrayUpdate = 0x13,
+
     SHK = 0x14,
+
+    ArrayUpdateContinue = 0x15,
     CMP = 0x16,
     DCU = 0x17,
     MRK = 0x18,
@@ -357,34 +415,18 @@ pub struct IRPMetaByte2 {
 
 #[derive(Debug)]
 pub struct KtbRedo<'a> {
-    v: &'a [VectorData],
     pub op: &'a RowOperation,
-    pub meta: &'a RPMeta,
+    pub meta: RPMetaWrapper<'a>,
 }
 
 impl<'a> FromCV<'a> for KtbRedo<'a> {
     fn from_vectors(v: &'a [VectorData]) -> Result<Self, ConvertError> {
         Ok(Self {
-            v,
             op: FromBytes::ref_from_bytes(&v[0].data)?,
-            meta: FromBytes::ref_from_bytes(&v[1].data)?,
-        })
-    }
-}
-
-impl KtbRedo<'_> {
-    const COL_DATA_BASE_INDEX: usize = 2;
-
-    /// `VARCHAR(N)`: raw string bytes. 'AAAA' -> 41414141 (hex)
-    /// `NUMBER`: [crate::oracle::types::get_number_from_bytes]
-    pub fn col_data(&self, meta: &RPMetaIRP, col: usize) -> Option<Option<&'_ [u8]>> {
-        meta.is_col_null(col as _).map(|is_null| {
-            if is_null {
-                None
-            } else {
-                let i = Self::COL_DATA_BASE_INDEX + col;
-                Some(&self.v[i].data[..(self.v[i].size as _)])
-            }
+            meta: RPMetaWrapper {
+                meta: FromBytes::ref_from_bytes(&v[1].data)?,
+                v: &v[2..],
+            },
         })
     }
 }

@@ -231,7 +231,16 @@ fn print_change(
         for (i, v) in change.vector.iter().enumerate() {
             println!(
                 " {} {}",
-                format!("vector#{i}[{}]", v.data.len()).underline(),
+                format!(
+                    "vector#{i}[{}{}]",
+                    v.size,
+                    if v.size == v.data.len() as _ {
+                        "".to_string()
+                    } else {
+                        format!("+{}", v.data.len() as u64 - v.size)
+                    }
+                )
+                .underline(),
                 hex::encode(&v.data)
             );
         }

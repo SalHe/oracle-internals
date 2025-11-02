@@ -1,7 +1,8 @@
+use anyhow::Ok;
 use num_traits::FromPrimitive;
 use ointernal_parser::oracle::change::{
     Table,
-    layers::layer11::{self, KtbRedo},
+    layers::layer11::{self, KtbRedo, RPMeta19, RPMetaWrapper, RowOperation},
 };
 
 use crate::dump::Dump;
@@ -12,33 +13,34 @@ impl Dump for Table<'_> {
             Self::UndoRowOperation(Some(irp)) => irp.dump(),
             Self::InsertRowPiece(Some(irp)) => irp.dump(),
             Self::DeleteRowPiece(Some(irp)) => irp.dump(),
+            Self::ArrayUpdate(Some(irp)) => irp.dump(),
             _ => Ok(false),
         }
     }
 }
 
-impl Dump for KtbRedo<'_> {
+impl Dump for RowOperation {
     fn dump(&self) -> anyhow::Result<bool> {
         println!("KTB Redo ");
         println!(
             "op: 0x{:02x}  ver: 0x{:02x}  ",
-            self.op.b1.into_bits(), // display byte1, not only op code's bitfields
-            self.op.b2.version(),
+            self.b1.into_bits(), // display byte1, not only op code's bitfields
+            self.b2.version(),
         );
         println!(
             "compat bit: {} ({}) padding: {}",
             layer11::IRPByte2::new()
-                .with_post_11(self.op.b2.post_11())
+                .with_post_11(self.b2.post_11())
                 .into_bits(),
-            if self.op.b2.post_11() {
+            if self.b2.post_11() {
                 "post-11"
             } else {
                 "pre-11"
             },
-            if self.op.b2.post_11() { 1 } else { 0 }
+            if self.b2.post_11() { 1 } else { 0 }
         );
 
-        match self.op.rest()? {
+        match self.rest()? {
             Some(r) => match r {
                 layer11::InsertRowPieceOpRest::F { f, block_clean } => {
                     println!(
@@ -73,15 +75,20 @@ impl Dump for KtbRedo<'_> {
                 layer11::InsertRowPieceOpRest::N => println!("op: N ??????????????TODO"),
                 layer11::InsertRowPieceOpRest::G => println!("op: G ??????????????TODO"),
             },
-            None => println!("op: [ktbdir] invalid op: 0x{:02X} ", self.op.b1.into_bits()),
+            None => println!("op: [ktbdir] invalid op: 0x{:02X} ", self.b1.into_bits()),
         }
+        Ok(true)
+    }
+}
 
+impl Dump for RPMetaWrapper<'_> {
+    fn dump(&self) -> anyhow::Result<bool> {
         let print_kdo_op = |op: Option<&'static str>| {
             println!(
                 "KDO Op code: {} row dependencies {}",
                 match op {
                     Some(x) => x.to_string(),
-                    None => format!("{}", self.meta.op.op()),
+                    None => format!(" {}", self.meta.op.op()),
                 },
                 // TODO verify?
                 if self.meta.op.row_dependency() {
@@ -90,9 +97,9 @@ impl Dump for KtbRedo<'_> {
                     "Disabled"
                 }
             );
-            println!(
-                "  xtype: {} flags: 0x{:08x}  bdba: {}  hdba: {}",
-                match layer11::IRPXtype::from_u8(self.meta.xtype.typ()) {
+
+            let xtype = {
+                let mut xtype = match layer11::IRPXtype::from_u8(self.meta.xtype.typ()) {
                     Some(xt) => match xt {
                         layer11::IRPXtype::XA => "XA",
                         layer11::IRPXtype::XR => "XR",
@@ -100,7 +107,18 @@ impl Dump for KtbRedo<'_> {
                     }
                     .to_string(),
                     None => format!("{}", self.meta.xtype.typ()),
-                },
+                };
+
+                if self.meta.xtype.kdo_kdom2() {
+                    xtype.push_str("xtype KDO_KDOM2");
+                }
+
+                xtype
+            };
+
+            println!(
+                "  xtype: {} flags: 0x{:08x}  bdba: {}  hdba: {}",
+                xtype,
                 self.meta.xtype.with_typ(0).into_bits(), // clear type, flags remained
                 self.meta.bdba,
                 self.meta.hdba,
@@ -111,7 +129,7 @@ impl Dump for KtbRedo<'_> {
             );
         };
 
-        let kdo_data = self.meta.rest()?;
+        let kdo_data = self.rest()?;
         match kdo_data {
             Some(op) => match op {
                 layer11::RPMetaRest::IUR => {
@@ -209,8 +227,22 @@ impl Dump for KtbRedo<'_> {
                 layer11::RPMetaRest::QMD => {
                     print_kdo_op(Some("QMD"));
                 }
+                layer11::RPMetaRest::ArrayUpdate(RPMeta19 { row_count, rows }) => {
+                    print_kdo_op(Some(" 19"));
+                    println!("Array Update of {row_count} rows: ");
+                    println!("{rows:?}");
+                    for row in rows {
+                        row.dump()?;
+                    }
+                }
                 layer11::RPMetaRest::DSC => {
                     print_kdo_op(Some("DSC"));
+                }
+                layer11::RPMetaRest::ArrayUpdateContinue => {
+                    // TODO fields of ArrayUpdateContinue
+                    println!("tabn: ? slot: ?(0x?) flag: 0x?? lock: ? ckix: ?");
+                    println!("ncol: ? nnew: ? size: ?");
+                    print_kdo_op(Some(" 21"));
                 }
                 layer11::RPMetaRest::LMN => {
                     print_kdo_op(Some("LMN"));
@@ -245,6 +277,14 @@ impl Dump for KtbRedo<'_> {
             },
             None => print_kdo_op(None),
         };
+        Ok(true)
+    }
+}
+
+impl Dump for KtbRedo<'_> {
+    fn dump(&self) -> anyhow::Result<bool> {
+        self.op.dump()?;
+        self.meta.dump()?;
         Ok(true)
     }
 }

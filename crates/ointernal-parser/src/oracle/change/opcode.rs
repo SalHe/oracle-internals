@@ -316,7 +316,7 @@ codes_for_layer! {
         /// Marked: Logminer support - RM for LOB operation errors - KDOLBE
         LogminerLobErrors = 18,
         /// Array update ?
-        ArrayUpdate = 19,
+        ArrayUpdate = 19 !layers::layer11::KtbRedo,
         /// SHK (mark as shrunk?)
         MarkAsShrunk = 20,
         /// Marked: Logminer support - KDOURP2
