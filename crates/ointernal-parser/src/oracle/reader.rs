@@ -269,50 +269,35 @@ impl RedoFileReader {
         trace!(expected_size, block_crossed, "begin read data");
 
         let mut ranges = Vec::new();
-        if block_crossed {
-            let mut rest = expected_size;
-            while rest > 0 {
-                let can_read = min(
-                    self.file_header().header.block_size as usize - self.offset_in_block,
-                    rest,
-                );
-
-                let begin = self.offset_in_block as u64
-                    + (self.file_header().header.block_size as u64)
-                        * (self.curr_block_head().id as u64);
-                ranges.push(begin..(begin + can_read as u64));
-                trace!(
-                    block_id = self.curr_block_head().id,
-                    self.content_offset, self.offset_in_block, can_read, "read slice of data",
-                );
-
-                target[(expected_size - rest)..(expected_size - rest + can_read)].copy_from_slice(
-                    &self.curr_block[self.offset_in_block..(self.offset_in_block + can_read)],
-                );
-                rest -= can_read;
-                self.offset_in_block += can_read;
-
-                if self.offset_in_block == self.file_header().header.block_size as usize {
-                    self.next_redo_block()?;
-                }
-            }
-        } else {
-            trace!(
-                block_id = self.curr_block_head().id,
-                self.content_offset,
-                self.offset_in_block,
-                can_read = expected_size,
-                "read all data"
+        let mut rest = expected_size;
+        while rest > 0 {
+            // current read size
+            let can_read = min(
+                self.file_header().header.block_size as usize - self.offset_in_block,
+                rest,
             );
-            target.copy_from_slice(
-                &self.curr_block[self.offset_in_block..(self.offset_in_block + expected_size)],
-            );
-            self.offset_in_block += expected_size;
 
+            // recording offsets from original redo file
             let begin = self.offset_in_block as u64
                 + (self.file_header().header.block_size as u64)
                     * (self.curr_block_head().id as u64);
-            ranges.push(begin..(begin + expected_size as u64));
+            ranges.push(begin..(begin + can_read as u64));
+            trace!(
+                block_id = self.curr_block_head().id,
+                self.content_offset, self.offset_in_block, can_read, "read slice of data",
+            );
+
+            // copy contents
+            target[(expected_size - rest)..(expected_size - rest + can_read)].copy_from_slice(
+                &self.curr_block[self.offset_in_block..(self.offset_in_block + can_read)],
+            );
+            rest -= can_read;
+            self.offset_in_block += can_read;
+
+            // block crossed
+            if self.offset_in_block == self.file_header().header.block_size as usize {
+                self.next_redo_block()?;
+            }
         }
 
         self.content_offset += expected_size;

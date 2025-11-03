@@ -142,6 +142,7 @@ impl RPMeta {
     pub(crate) fn rest<'a>(
         &'a self,
         v: &'a [VectorData],
+        wrapper: &'a RPMetaWrapper<'a>,
     ) -> Result<Option<RPMetaRest<'a>>, ConvertError> {
         let op = KdoOp::from_u8(self.op.op());
         if let Some(op) = op {
@@ -163,21 +164,37 @@ impl RPMeta {
                 KdoOp::QMD => RPMetaRest::QMD,
                 KdoOp::ArrayUpdate => {
                     const SINGLE_SIZE: usize = 28; // TODO how to determine size of single entry?
-                    let row_count = *u32::ref_from_bytes(&self.rest)?;
+                    let row_count = self.rest[0];
                     let rows = v[0]
                         .data
                         .chunks_exact(SINGLE_SIZE)
-                        .map(|x| -> Result<RPMetaWrapper<'_>, ConvertError> {
+                        .enumerate()
+                        .map(|(i_row, x)| -> Result<RPMetaWrapper<'_>, ConvertError> {
                             Ok(RPMetaWrapper {
                                 meta: RPMeta::ref_from_bytes(x)?,
                                 v: &v[1..], // columns' data is saved in single vector, and shared across different UPDATEs.
+                                from_rows: Some(i_row as _),
                             })
                         })
                         .collect::<Result<Vec<_>, _>>()?;
                     RPMetaRest::ArrayUpdate(RPMeta19 { row_count, rows })
                 }
                 KdoOp::DSC => RPMetaRest::DSC,
-                KdoOp::ArrayUpdateContinue => RPMetaRest::ArrayUpdateContinue,
+                KdoOp::ArrayUpdateContinue => {
+                    let row_id = wrapper.from_rows.unwrap() as usize;
+                    let begin_column = <[u16]>::ref_from_bytes(&v[0].data)?[row_id];
+
+                    let data_sizes = <[u16]>::ref_from_bytes(&v[1].data)?;
+                    let data_size = data_sizes[wrapper.from_rows.unwrap() as usize] as usize;
+                    let data_offset = data_sizes.iter().take(row_id).sum::<u16>() as usize;
+
+                    let meta = RPMeta21Wrapper {
+                        meta: FromBytes::ref_from_bytes(&self.rest)?,
+                        begin_column,
+                        data: &v[2].data[data_offset..(data_offset + data_size)],
+                    };
+                    RPMetaRest::ArrayUpdateContinue(meta)
+                }
                 KdoOp::LMN => RPMetaRest::LMN,
                 KdoOp::LLB => RPMetaRest::LLB,
                 KdoOp::SHK => RPMetaRest::SHK,
@@ -201,11 +218,14 @@ impl RPMeta {
 pub struct RPMetaWrapper<'a> {
     pub meta: &'a RPMeta,
     v: &'a [VectorData],
+
+    // context variables
+    from_rows: Option<u8>,
 }
 
 impl RPMetaWrapper<'_> {
     pub fn rest(&self) -> Result<Option<RPMetaRest<'_>>, ConvertError> {
-        self.meta.rest(self.v)
+        self.meta.rest(self.v, self)
     }
 }
 
@@ -263,8 +283,30 @@ pub struct RPMetaDRP {
 #[derive(KnownLayout, Immutable, FromBytes, Debug)]
 #[repr(C)]
 pub struct RPMeta19<'a> {
-    pub row_count: u32,
+    pub row_count: u8,
     pub rows: Vec<RPMetaWrapper<'a>>,
+}
+
+#[derive(KnownLayout, Immutable, FromBytes, Debug)]
+#[repr(C)]
+pub struct RPMeta21 {
+    pub flags: u8,
+    pub lock: u8,
+    pub ckix: u8,
+    /// printed in [i32]
+    pub tabn: i8,
+    pub slot: u16,
+    pub ncol: u8,
+    pub nnew: u8,
+    pub size: u16,
+    pub vect: i16,
+}
+
+#[derive(Debug)]
+pub struct RPMeta21Wrapper<'a> {
+    pub meta: &'a RPMeta21,
+    pub begin_column: u16,
+    pub data: &'a [u8],
 }
 
 pub enum RPMetaRest<'a> {
@@ -282,7 +324,7 @@ pub enum RPMetaRest<'a> {
     QMD,
     ArrayUpdate(RPMeta19<'a>),
     DSC,
-    ArrayUpdateContinue,
+    ArrayUpdateContinue(RPMeta21Wrapper<'a>),
     LMN,
     LLB,
     SHK,
@@ -437,6 +479,7 @@ impl<'a> FromCV<'a> for KtbRedo<'a> {
             meta: RPMetaWrapper {
                 meta: FromBytes::ref_from_bytes(&v[1].data)?,
                 v: &v[2..],
+                from_rows: None,
             },
         })
     }

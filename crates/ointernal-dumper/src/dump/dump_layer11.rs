@@ -1,8 +1,9 @@
 use anyhow::Ok;
+use colored::Colorize;
 use num_traits::FromPrimitive;
 use ointernal_parser::oracle::change::{
     Table,
-    layers::layer11::{self, KtbRedo, RPMeta19, RPMetaWrapper, RowOperation},
+    layers::layer11::{self, KtbRedo, RPMetaWrapper, RowOperation},
 };
 
 use crate::dump::Dump;
@@ -227,22 +228,51 @@ impl Dump for RPMetaWrapper<'_> {
                 layer11::RPMetaRest::QMD => {
                     print_kdo_op(Some("QMD"));
                 }
-                layer11::RPMetaRest::ArrayUpdate(RPMeta19 { row_count, rows }) => {
+                layer11::RPMetaRest::ArrayUpdate(m) => {
                     print_kdo_op(Some(" 19"));
-                    println!("Array Update of {row_count} rows: ");
-                    println!("{rows:?}");
-                    for row in rows {
+                    println!("Array Update of {} rows: ", m.row_count);
+                    for row in m.rows {
                         row.dump()?;
                     }
                 }
                 layer11::RPMetaRest::DSC => {
                     print_kdo_op(Some("DSC"));
                 }
-                layer11::RPMetaRest::ArrayUpdateContinue => {
-                    // TODO fields of ArrayUpdateContinue
-                    println!("tabn: ? slot: ?(0x?) flag: 0x?? lock: ? ckix: ?");
-                    println!("ncol: ? nnew: ? size: ?");
+                layer11::RPMetaRest::ArrayUpdateContinue(m) => {
+                    println!(
+                        "tabn: {} slot: {}(0x{:x}) flag: 0x{:02x} lock: {} ckix: {}",
+                        m.meta.tabn as i32,
+                        m.meta.slot,
+                        m.meta.slot,
+                        m.meta.flags,
+                        m.meta.lock,
+                        m.meta.ckix,
+                    );
+                    println!(
+                        "ncol: {} nnew: {} size: {}",
+                        m.meta.ncol, m.meta.nnew, m.meta.size,
+                    );
                     print_kdo_op(Some(" 21"));
+                    println!("vect = 0"); // TODO what's this?
+
+                    let mut data = m.data;
+                    let mut col_id = m.begin_column;
+                    while data.len() > 0 {
+                        let mut size = data[0];
+                        if (size as usize) + 1 > data.len() {
+                            println!(
+                                " {}: col data length is not enough, will be truncated",
+                                "WARNING".yellow().bold()
+                            );
+                            size = (data.len() - 1) as _;
+                        }
+
+                        let col_data = &data[1..(1 + (size as usize))];
+                        println!("col {col_id:>2}: [{size:>2}]  {}", hex::encode(col_data));
+
+                        col_id += 1;
+                        data = &data[(1 + (size as usize))..];
+                    }
                 }
                 layer11::RPMetaRest::LMN => {
                     print_kdo_op(Some("LMN"));
