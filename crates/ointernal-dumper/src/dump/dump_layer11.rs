@@ -140,28 +140,28 @@ impl Dump for RPMetaWrapper<'_> {
 
                     println!(
                         "tabn: {} slot: {}(0x{:x}) size/delt: {}",
-                        m.tabn as i32, // seems dumped as i32 in Oracle
-                        m.slot,
-                        m.slot,
-                        m.delta_size,
+                        m.irp.tabn as i32, // seems dumped as i32 in Oracle
+                        m.irp.slot,
+                        m.irp.slot,
+                        m.irp.delta_size,
                     );
                     println!(
                         "fb: {}{}{}{}{}{}{}{} lb: 0x{:x}  cc: {}",
-                        if m.fb_flags.k() { 'K' } else { '-' },
-                        if m.fb_flags.c() { 'C' } else { '-' },
-                        if m.fb_flags.h() { 'H' } else { '-' },
-                        if m.fb_flags.d() { 'D' } else { '-' },
-                        if m.fb_flags.f() { 'F' } else { '-' },
-                        if m.fb_flags.l() { 'L' } else { '-' },
-                        if m.fb_flags.p() { 'P' } else { '-' },
-                        if m.fb_flags.n() { 'N' } else { '-' },
-                        m.lb,
-                        m.column_count,
+                        if m.irp.fb_flags.k() { 'K' } else { '-' },
+                        if m.irp.fb_flags.c() { 'C' } else { '-' },
+                        if m.irp.fb_flags.h() { 'H' } else { '-' },
+                        if m.irp.fb_flags.d() { 'D' } else { '-' },
+                        if m.irp.fb_flags.f() { 'F' } else { '-' },
+                        if m.irp.fb_flags.l() { 'L' } else { '-' },
+                        if m.irp.fb_flags.p() { 'P' } else { '-' },
+                        if m.irp.fb_flags.n() { 'N' } else { '-' },
+                        m.irp.lb,
+                        m.irp.column_count,
                     );
 
                     print!("null: ");
-                    for c in 0..m.column_count {
-                        let n = match m.is_col_null(c) {
+                    for c in 0..m.irp.column_count {
+                        let n = match m.irp.is_col_null(c) {
                             Some(is_null) => {
                                 if is_null {
                                     "N"
@@ -175,8 +175,8 @@ impl Dump for RPMetaWrapper<'_> {
                     }
                     println!();
 
-                    for (i, col) in (0..m.column_count)
-                        .map(|i| self.col_data(m, i as _).expect("Column must exist"))
+                    for (i, col) in (0..m.irp.column_count)
+                        .map(|i| m.col_data(i as _).expect("Column must exist"))
                         .enumerate()
                     {
                         println!(

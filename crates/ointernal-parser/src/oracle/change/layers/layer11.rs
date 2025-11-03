@@ -147,7 +147,10 @@ impl RPMeta {
         if let Some(op) = op {
             let rest = match op {
                 KdoOp::IUR => RPMetaRest::IUR,
-                KdoOp::IRP => RPMetaRest::IRP(FromBytes::ref_from_bytes(&self.rest)?),
+                KdoOp::IRP => RPMetaRest::IRP(RPMetaIRPWrapper {
+                    irp: FromBytes::ref_from_bytes(&self.rest)?,
+                    v,
+                }),
                 KdoOp::DRP => RPMetaRest::DRP(FromBytes::ref_from_bytes(&self.rest)?),
                 KdoOp::LKR => RPMetaRest::LKR,
                 KdoOp::URP => RPMetaRest::URP,
@@ -204,19 +207,6 @@ impl RPMetaWrapper<'_> {
     pub fn rest(&self) -> Result<Option<RPMetaRest<'_>>, ConvertError> {
         self.meta.rest(self.v)
     }
-
-    /// `VARCHAR(N)`: raw string bytes. 'AAAA' -> 41414141 (hex)
-    /// `NUMBER`: [crate::oracle::types::get_number_from_bytes]
-    pub fn col_data(&self, meta: &RPMetaIRP, col: usize) -> Option<Option<&'_ [u8]>> {
-        meta.is_col_null(col as _).map(|is_null| {
-            if is_null {
-                None
-            } else {
-                let i = col;
-                Some(&self.v[i].data[..(self.v[i].size as _)])
-            }
-        })
-    }
 }
 
 #[derive(KnownLayout, Immutable, FromBytes, Debug)]
@@ -241,6 +231,27 @@ pub struct RPMetaIRP {
     nulls: [u8],
 }
 
+#[derive(Debug)]
+pub struct RPMetaIRPWrapper<'a> {
+    pub irp: &'a RPMetaIRP,
+    v: &'a [VectorData],
+}
+
+impl RPMetaIRPWrapper<'_> {
+    /// `VARCHAR(N)`: raw string bytes. 'AAAA' -> 41414141 (hex)
+    /// `NUMBER`: [crate::oracle::types::get_number_from_bytes]
+    pub fn col_data(&self, col: usize) -> Option<Option<&'_ [u8]>> {
+        self.irp.is_col_null(col as _).map(|is_null| {
+            if is_null {
+                None
+            } else {
+                let i = col;
+                Some(&self.v[i].data[..(self.v[i].size as _)])
+            }
+        })
+    }
+}
+
 #[derive(KnownLayout, Immutable, FromBytes, Debug)]
 #[repr(C)]
 pub struct RPMetaDRP {
@@ -258,7 +269,7 @@ pub struct RPMeta19<'a> {
 
 pub enum RPMetaRest<'a> {
     IUR,
-    IRP(&'a RPMetaIRP),
+    IRP(RPMetaIRPWrapper<'a>),
     DRP(&'a RPMetaDRP),
     LKR,
     URP,
