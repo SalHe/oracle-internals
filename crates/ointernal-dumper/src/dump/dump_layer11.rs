@@ -253,7 +253,7 @@ impl Dump for RPMetaWrapper<'_> {
                         m.meta.ncol, m.meta.nnew, m.meta.size,
                     );
                     print_kdo_op(Some(" 21"));
-                    println!("vect = 0"); // TODO what's this?
+                    println!("vect = {}", m.meta.vect);
 
                     let mut data = m.data;
                     let mut col_id = m.begin_column;
