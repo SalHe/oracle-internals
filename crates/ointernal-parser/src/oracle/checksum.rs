@@ -2,7 +2,7 @@ use zerocopy::{CastError, FromBytes};
 
 use crate::oracle::redo::RedoBlockHead;
 
-fn calc_checksum_impl(block: &mut [u8]) -> u16 {
+fn calc_checksum_impl(block: &[u8]) -> u16 {
     let mut checksum: u64 = 0;
     for i in 0..block.len() / 8 {
         let q = u64::read_from_bytes(&block[(i * 8)..((i + 1) * 8)]).unwrap();

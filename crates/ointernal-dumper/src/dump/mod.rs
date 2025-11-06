@@ -31,7 +31,7 @@ fn print_example_infos() {
     println!(" Times: creation thru eternity");
 }
 
-fn print_header_info(fh: &FileHeaderBlock, rh: &RedoFileHead) {
+fn print_header_info(fh: &FileHeaderBlock, rh: &RedoFileHead, checksum: u16) {
     println!(" FILE HEADER:");
     println!("	Compatibility Vsn = {}=0x{:08X}", rh.vsn, rh.vsn);
     println!(
@@ -97,7 +97,7 @@ fn print_header_info(fh: &FileHeaderBlock, rh: &RedoFileHead) {
         OracleDateTime::from(rh.thread_closed_scn_timestamp),
     );
     println!(" Real next scn: 0x{:016x}", rh.real_next_scn.full_scn());
-    println!(" Disk cksum: 0x{:04x} Calc cksum: 0x????", rh.head.checksum); // TODO calc checksum
+    println!(" Disk cksum: 0x{:04x} Calc cksum: 0x{:04x}", rh.head.checksum, checksum);
     println!(
         " Terminal recovery stop scn: 0x{:016x}",
         rh.terminal_recovery_stop_scn.full_scn()
@@ -292,7 +292,8 @@ pub fn read_redo(file: PathBuf, force_print_vector: bool) -> anyhow::Result<()> 
 
     let file_header = reader.file_header();
     let redo_file_header = reader.redo_file_header();
-    print_header_info(file_header, redo_file_header);
+    let checksum = reader.read_file_header_checksum()?.0;
+    print_header_info(file_header, redo_file_header, checksum);
 
     let mut i_record = 1usize;
     while let Some((rba, record)) = eof_return_ok!(reader.begin_read_record())? {

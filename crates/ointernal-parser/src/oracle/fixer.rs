@@ -50,7 +50,7 @@ impl RedoFixer {
         self.reader.next_redo_block()?;
 
         let mut operations = Vec::new();
-        let (actual, expected) = self.reader.calc_curr_block_checksum().unwrap();
+        let (actual, expected) = self.reader.calc_curr_block_checksum().expect("Failed to calc checksum");
         if actual != expected {
             operations.push(FixOperation::FixCheckSum { actual, expected });
         }

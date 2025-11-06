@@ -95,7 +95,7 @@ impl RedoFileReader {
         })
     }
 
-    /// 重新读取文件头，文件读取指针将被重置
+    /// Reload file header, and read cursor will be reset to the beginning of first redo block.
     pub fn reload_header(&mut self) -> Result<(), ReaderError> {
         self.read_file_header()?;
         self.read_redo_file_header()?;
@@ -111,6 +111,11 @@ impl RedoFileReader {
         RedoFileHead::ref_from_bytes(&self.block1).unwrap()
     }
 
+    pub fn read_file_header_checksum(&self) -> Result<(u16, u16), ReaderError> {
+        let mut block = self.block1.clone();
+        Ok(calc_checksum(&mut block).expect("Failed to calc checksum"))
+    }
+
     pub fn curr_block_head(&self) -> &RedoBlockHead {
         RedoBlockHead::ref_from_bytes(&self.curr_block[0..std::mem::size_of::<RedoBlockHead>()])
             .unwrap()
@@ -122,7 +127,7 @@ impl RedoFileReader {
 
     #[tracing::instrument(skip(self))]
     pub(crate) fn read_file_header(&mut self) -> Result<(), ReaderError> {
-        // 确认block大小
+        // Determine file block size
         self.file.seek(std::io::SeekFrom::Start(0))?;
         let mut buffer = [0u8; std::mem::size_of::<FileHeader>()];
         self.file.read_exact(&mut buffer)?;
@@ -139,7 +144,7 @@ impl RedoFileReader {
             return Err(ReaderError::InvalidFileMagicNumber);
         }
 
-        // 实际读取 block0
+        // Read block0
         self.file.seek(std::io::SeekFrom::Start(0))?;
         let mut block0 = vec![0u8; header.block_size as usize];
         self.file.read_exact(&mut block0)?;
