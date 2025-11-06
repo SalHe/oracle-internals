@@ -9,6 +9,8 @@ use colored::Colorize;
 use num_traits::Num;
 use ointernal_parser::oracle::fixer::{FixOperation, RedoFixer};
 
+use crate::utils::Hex;
+
 fn fix(f: &mut File, block_id: u32, block_size: u32, op: FixOperation) -> anyhow::Result<()> {
     print!("   ");
     match op {
@@ -71,8 +73,8 @@ pub fn fix_redo(file: PathBuf, replaces: Vec<String>) -> anyhow::Result<()> {
         f.seek(SeekFrom::Start(addr))?;
         f.write_all(&bin)?;
         println!("{} bytes at 0x{addr:04x} (hex)", "replaced".green(),);
-        println!("         old {}", hex::encode(&old));
-        println!("         new {}", hex::encode(&bin));
+        println!("         old {}", Hex::spaced(&old));
+        println!("         new {}", Hex::spaced(&bin));
     }
     f.flush()?;
     if !replaces.is_empty() {

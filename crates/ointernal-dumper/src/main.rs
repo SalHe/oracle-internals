@@ -1,5 +1,6 @@
 mod dump;
 mod fix;
+mod utils;
 
 use std::path::PathBuf;
 

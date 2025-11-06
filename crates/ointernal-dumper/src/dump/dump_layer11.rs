@@ -6,7 +6,7 @@ use ointernal_parser::oracle::change::{
     layers::layer11::{self, KtbRedo, RPMetaWrapper, RowOperation},
 };
 
-use crate::dump::Dump;
+use crate::{dump::Dump, utils::Hex};
 
 impl Dump for Table<'_> {
     fn dump(&self) -> anyhow::Result<bool> {
@@ -268,7 +268,7 @@ impl Dump for RPMetaWrapper<'_> {
                         }
 
                         let col_data = &data[1..(1 + (size as usize))];
-                        println!("col {col_id:>2}: [{size:>2}]  {}", hex::encode(col_data));
+                        println!("col {col_id:>2}: [{size:>2}]  {}", Hex::spaced(col_data));
 
                         col_id += 1;
                         data = &data[(1 + (size as usize))..];

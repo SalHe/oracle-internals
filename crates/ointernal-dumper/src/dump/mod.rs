@@ -15,6 +15,8 @@ use ointernal_parser::oracle::{
     timestamp::OracleTimestamp,
 };
 
+use crate::utils::Hex;
+
 trait Dump {
     fn dump(&self) -> anyhow::Result<bool>;
 }
@@ -97,7 +99,10 @@ fn print_header_info(fh: &FileHeaderBlock, rh: &RedoFileHead, checksum: u16) {
         OracleDateTime::from(rh.thread_closed_scn_timestamp),
     );
     println!(" Real next scn: 0x{:016x}", rh.real_next_scn.full_scn());
-    println!(" Disk cksum: 0x{:04x} Calc cksum: 0x{:04x}", rh.head.checksum, checksum);
+    println!(
+        " Disk cksum: 0x{:04x} Calc cksum: 0x{:04x}",
+        rh.head.checksum, checksum
+    );
     println!(
         " Terminal recovery stop scn: 0x{:016x}",
         rh.terminal_recovery_stop_scn.full_scn()
@@ -146,7 +151,7 @@ fn print_header_info(fh: &FileHeaderBlock, rh: &RedoFileHead, checksum: u16) {
 
     println!(" Zero blocks: {}", rh.zero_blocks);
     println!(" Format ID is {}", rh.format_id);
-    println!(" redo log key is {}", hex::encode(rh.log_key));
+    println!(" redo log key is {}", Hex::sequence(&rh.log_key));
     println!(" redo log key flag is {:x}(HEX)", rh.redo_key_flag);
     println!(
         " DAX High watermark block number: {}",
@@ -246,7 +251,7 @@ fn print_change(
                     format!("CROSSED BLOCK({} pieces)", v.ranges.len())
                         .bold()
                         .red(),
-                    hex::encode(&v.data)
+                    Hex::grouped(&v.data, 4)
                 );
                 format!("{}\t", " ".repeat(header.len()))
             } else {
@@ -262,7 +267,7 @@ fn print_change(
                     ident,
                     r.start,
                     r.end,
-                    hex::encode(&curr)
+                    Hex::grouped(&curr, 4)
                 );
             }
         }
