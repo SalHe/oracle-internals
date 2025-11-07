@@ -9,11 +9,10 @@ impl Display for Hex<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (i, b) in self.v.iter().enumerate() {
             write!(f, "{:02x}", b)?;
-            if let Some(group) = self.grouped {
-                if (i + 1) % group == 0 && i + 1 != self.v.len() {
+            if let Some(group) = self.grouped
+                && (i + 1) % group == 0 && i + 1 != self.v.len() {
                     write!(f, " ")?;
                 }
-            }
         }
         Ok(())
     }

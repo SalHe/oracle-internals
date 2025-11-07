@@ -269,7 +269,7 @@ impl Dump for RPMetaWrapper<'_> {
 
                     let mut data = m.data;
                     let mut col_id = m.begin_column;
-                    while data.len() > 0 {
+                    while !data.is_empty() {
                         let mut size = data[0];
                         if (size as usize) + 1 > data.len() {
                             println!(

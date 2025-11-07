@@ -271,7 +271,7 @@ fn print_change(
                     ident,
                     r.start,
                     r.end,
-                    Hex::grouped(&curr, 4)
+                    Hex::grouped(curr, 4)
                 );
             }
         }
