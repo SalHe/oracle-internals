@@ -154,7 +154,18 @@ impl RPMeta {
                 }),
                 KdoOp::DRP => RPMetaRest::DRP(FromBytes::ref_from_bytes(&self.rest)?),
                 KdoOp::LKR => RPMetaRest::LKR,
-                KdoOp::URP => RPMetaRest::URP,
+                KdoOp::URP => {
+                    // TODO what's `rest` for ?
+                    let (m, _rest) = FromBytes::ref_from_prefix(&self.rest)?;
+                    RPMetaRest::URP(RPMetaURPWrapper {
+                        meta: m,
+                        cols: <[u16]>::ref_from_bytes(&v[0].data)?,
+                        data: v[1..]
+                            .iter()
+                            .map(|x| &x.data[..(x.size as _)])
+                            .collect::<Vec<_>>(),
+                    })
+                }
                 KdoOp::ORP => RPMetaRest::ORP,
                 KdoOp::MFC => RPMetaRest::MFC,
                 KdoOp::CFA => RPMetaRest::CFA,
@@ -289,7 +300,7 @@ pub struct RPMeta19<'a> {
 
 #[derive(KnownLayout, Immutable, FromBytes, Debug)]
 #[repr(C)]
-pub struct RPMeta21 {
+pub struct RPMetaUpdate {
     pub flags: u8,
     pub lock: u8,
     pub ckix: u8,
@@ -304,9 +315,16 @@ pub struct RPMeta21 {
 
 #[derive(Debug)]
 pub struct RPMeta21Wrapper<'a> {
-    pub meta: &'a RPMeta21,
+    pub meta: &'a RPMetaUpdate,
     pub begin_column: u16,
     pub data: &'a [u8],
+}
+
+#[derive(Debug)]
+pub struct RPMetaURPWrapper<'a> {
+    pub meta: &'a RPMetaUpdate,
+    pub cols: &'a [u16],
+    pub data: Vec<&'a [u8]>,
 }
 
 pub enum RPMetaRest<'a> {
@@ -314,7 +332,7 @@ pub enum RPMetaRest<'a> {
     IRP(RPMetaIRPWrapper<'a>),
     DRP(&'a RPMetaDRP),
     LKR,
-    URP,
+    URP(RPMetaURPWrapper<'a>),
     ORP,
     MFC,
     CFA,

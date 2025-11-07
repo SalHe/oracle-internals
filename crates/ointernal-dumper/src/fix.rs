@@ -73,8 +73,8 @@ pub fn fix_redo(file: PathBuf, replaces: Vec<String>) -> anyhow::Result<()> {
         f.seek(SeekFrom::Start(addr))?;
         f.write_all(&bin)?;
         println!("{} bytes at 0x{addr:04x} (hex)", "replaced".green(),);
-        println!("         old {}", Hex::spaced(&old));
-        println!("         new {}", Hex::spaced(&bin));
+        println!("         old {}", Hex::grouped(&old, 4));
+        println!("         new {}", Hex::grouped(&bin, 4));
     }
     f.flush()?;
     if !replaces.is_empty() {

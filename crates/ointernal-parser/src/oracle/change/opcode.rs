@@ -288,7 +288,7 @@ codes_for_layer! {
         /// lock row piece
         LockRowPiece = 4,
         /// URP update row piece
-        UpdateRowPiece = 5,
+        UpdateRowPiece = 5 !layers::layer11::KtbRedo,
         /// overwrite row piece
         OverwriteRowPiece = 6,
         /// manipulate first column

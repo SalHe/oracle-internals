@@ -3,7 +3,7 @@ use colored::Colorize;
 use num_traits::FromPrimitive;
 use ointernal_parser::oracle::change::{
     Table,
-    layers::layer11::{self, KtbRedo, RPMetaWrapper, RowOperation},
+    layers::layer11::{self, KtbRedo, RPMetaUpdate, RPMetaWrapper, RowOperation},
 };
 
 use crate::{dump::Dump, utils::Hex};
@@ -15,8 +15,23 @@ impl Dump for Table<'_> {
             Self::InsertRowPiece(Some(irp)) => irp.dump(),
             Self::DeleteRowPiece(Some(irp)) => irp.dump(),
             Self::ArrayUpdate(Some(irp)) => irp.dump(),
+            Self::UpdateRowPiece(Some(irp)) => irp.dump(),
             _ => Ok(false),
         }
+    }
+}
+
+impl Dump for RPMetaUpdate {
+    fn dump(&self) -> anyhow::Result<bool> {
+        println!(
+            "tabn: {} slot: {}(0x{:x}) flag: 0x{:02x} lock: {} ckix: {}",
+            self.tabn as i32, self.slot, self.slot, self.flags, self.lock, self.ckix,
+        );
+        println!(
+            "ncol: {} nnew: {} size: {}",
+            self.ncol, self.nnew, self.size,
+        );
+        Ok(true)
     }
 }
 
@@ -204,8 +219,17 @@ impl Dump for RPMetaWrapper<'_> {
                 layer11::RPMetaRest::LKR => {
                     print_kdo_op(Some("LKR"));
                 }
-                layer11::RPMetaRest::URP => {
+                layer11::RPMetaRest::URP(m) => {
                     print_kdo_op(Some("URP"));
+                    m.meta.dump()?;
+                    for (i, col_id) in m.cols.iter().enumerate() {
+                        println!(
+                            "col {:>2}: [{:>2}]  {}",
+                            col_id,
+                            m.data[i].len(),
+                            Hex::spaced(m.data[i])
+                        );
+                    }
                 }
                 layer11::RPMetaRest::ORP => {
                     print_kdo_op(Some("ORP"));
@@ -239,19 +263,7 @@ impl Dump for RPMetaWrapper<'_> {
                     print_kdo_op(Some("DSC"));
                 }
                 layer11::RPMetaRest::ArrayUpdateContinue(m) => {
-                    println!(
-                        "tabn: {} slot: {}(0x{:x}) flag: 0x{:02x} lock: {} ckix: {}",
-                        m.meta.tabn as i32,
-                        m.meta.slot,
-                        m.meta.slot,
-                        m.meta.flags,
-                        m.meta.lock,
-                        m.meta.ckix,
-                    );
-                    println!(
-                        "ncol: {} nnew: {} size: {}",
-                        m.meta.ncol, m.meta.nnew, m.meta.size,
-                    );
+                    m.meta.dump()?;
                     print_kdo_op(Some(" 21"));
                     println!("vect = {}", m.meta.vect);
 

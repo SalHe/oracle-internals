@@ -233,6 +233,10 @@ fn print_change(
     };
 
     if !printed || force_print_vector {
+        if !printed {
+            println!("{}", "UNRECOGNIZED VECTOR DATA".bold().yellow());
+        }
+
         for (i, v) in change.vector.iter().enumerate() {
             let header = format!(
                 "vector#{i}[{}{}]",
