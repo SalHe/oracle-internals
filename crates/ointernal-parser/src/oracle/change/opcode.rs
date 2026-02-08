@@ -346,10 +346,12 @@ codes_for_layer! {
         BlockLinkModify = 6 !layers::layer13::BlockLinkModify,
         /// KTSFRGRP (fgb/shdr modify freelist) redo: (options unlink block, move HWM)
         FreelistModify = 7 !layers::layer13::FreelistModify,
+        Unknown11 = 11,
         /// ktsbbu undo - undo operation on bitmap block
         BitmapBlockUndo1 = 13,
         /// ktsbbu undo - undo operation on bitmap block
         BitmapBlockUndo2 = 14,
+        Unknown15 = 15,
         /// ktsphfredo - Format Pagetable Segment Header
         FormatPagetableSegmentHeader = 17,
         /// ktspffredo - Format Level 1 Bitmap Block

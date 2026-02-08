@@ -161,7 +161,7 @@ impl RPMeta {
                     let (m, _rest) = FromBytes::ref_from_prefix(&self.rest)?;
                     RPMetaRest::URP(RPMetaURPWrapper {
                         meta: m,
-                        cols: <[u16]>::ref_from_bytes(&v[0].data)?,
+                        cols: <[u16]>::ref_from_bytes(&v[0].data[0..v[0].size as usize])?,
                         data: v[1..]
                             .iter()
                             .map(|x| &x.data[..(x.size as _)])

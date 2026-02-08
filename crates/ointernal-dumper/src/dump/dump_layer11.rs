@@ -195,7 +195,9 @@ impl Dump for RPMetaWrapper<'_> {
                             } else {
                                 "".to_string()
                             },
-                            col.map(hex::encode).unwrap_or("*NULL*".to_string())
+                            col.map(|x| Hex::spaced(x).auto_break_line())
+                                .map(|x| format!("{}", x))
+                                .unwrap_or("*NULL*".to_string())
                         );
                     }
                 }
