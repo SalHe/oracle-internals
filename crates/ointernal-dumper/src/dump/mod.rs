@@ -15,6 +15,7 @@ use ointernal_parser::oracle::{
     timestamp::OracleTimestamp,
 };
 
+use crate::filter;
 use crate::utils::Hex;
 
 trait Dump {
@@ -292,8 +293,15 @@ macro_rules! eof_return_ok {
     }};
 }
 
-pub fn read_redo(file: PathBuf, force_print_vector: bool) -> anyhow::Result<()> {
+pub fn read_redo(
+    file: PathBuf,
+    force_print_vector: bool,
+    filter: Option<String>,
+) -> anyhow::Result<()> {
     println!("DUMP OF REDO FROM FILE {file:?}");
+    if let Some(ref f) = filter {
+        println!("FILTER: {f}");
+    }
     print_example_infos();
 
     let mut reader = RedoFileReader::from_file(file)?;
@@ -305,25 +313,52 @@ pub fn read_redo(file: PathBuf, force_print_vector: bool) -> anyhow::Result<()> 
     print_header_info(file_header, redo_file_header, checksum);
 
     let mut i_record = 1usize;
+    let mut begin_time = OracleTimestamp(0);
     while let Some((rba, record)) = eof_return_ok!(reader.begin_read_record())? {
-        println!();
-        match record {
-            Record::V1(v1) => print_record_head(i_record, &rba, &v1.common, OracleTimestamp(0)),
-            Record::V2(v2) => {
-                print_record_head(i_record, &rba, &v2.common, v2.begin_time);
-                println!(
-                    "(LWN RBA: 0x{:06x}.{:08x}.{:04x} LEN: 0x???????? NST: 0x???? SCN: 0x{:016x})",
-                    rba.seq,
-                    rba.block_id,
-                    rba.offset,
-                    v2.lwn_scn.full_scn(),
-                );
-            }
+        // pick redo record begin time if possible
+        // only first record contains begin time (in Oracle 21.3.0 ee) and
+        // begin time of records after first record keep unchanged
+        if let Record::V2(v2) = record {
+            begin_time = v2.begin_time;
         }
 
+        let mut record_printed = false;
         let mut i_change = 1usize;
-
         while let Some(change) = eof_return_ok!(reader.read_change())? {
+            // filter record
+            if let Some(ref filter_expr) = filter {
+                let mut variables = std::collections::HashMap::new();
+                variables.insert("record", i_record as i64);
+                variables.insert("change", i_change as i64);
+                variables.insert("layer", change.change.layer as i64);
+                variables.insert("op", change.change.op as i64);
+                variables.insert("scn", change.change.scn.full_scn() as i64);
+
+                if !filter::matches(filter_expr, &variables)? {
+                    i_change += 1;
+                    continue;
+                }
+            }
+
+            // print record head if not printed
+            if !record_printed {
+                println!();
+                match record {
+                    Record::V1(v1) => print_record_head(i_record, &rba, &v1.common, begin_time),
+                    Record::V2(v2) => {
+                        print_record_head(i_record, &rba, &v2.common, v2.begin_time);
+                        println!(
+                            "(LWN RBA: 0x{:06x}.{:08x}.{:04x} LEN: 0x???????? NST: 0x???? SCN: 0x{:016x})",
+                            rba.seq,
+                            rba.block_id,
+                            rba.offset,
+                            v2.lwn_scn.full_scn(),
+                        );
+                    }
+                }
+                record_printed = true;
+            }
+
             print_change(i_change, force_print_vector, &change)?;
             i_change += 1;
         }

@@ -300,7 +300,7 @@ codes_for_layer! {
         /// Set Cluster key pointers
         SetClusterKeyPointers = 10,
         /// Insert multiple rows
-        InsertMultipleRows = 11,
+        InsertMultipleRows = 11 !layers::layer11::KtbRedo,
         /// Delete multiple rows
         DeleteMultipleRows = 12,
         /// toggle block header flags

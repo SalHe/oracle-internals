@@ -3,6 +3,8 @@ import uuid
 import io
 import tarfile
 import tempfile
+import subprocess
+import shlex
 from oracle_internals.cli.decorators import within_container
 from oracle_internals.db import db_connection, must_get_container
 
@@ -73,6 +75,30 @@ def _dump_one(redo_file):
 @within_container
 def dump_redo(args):
     container = must_get_container()
+    
+    # If replacements provided, run local odumper fix first (requires local_file)
+    if getattr(args, 'replaces', None):
+        if not args.local_file:
+            print("--replaces only works with --local_file (provide a local redo file)")
+            return
+
+        odumper = os.path.join(os.getcwd(), 'odumper')
+        if not os.path.exists(odumper):
+            odumper = './odumper'
+
+        cmd = [odumper, 'fix', args.redo_file]
+        for rep in args.replaces:
+            cmd.extend(['-r', rep])
+
+        print(f"Running: {' '.join(shlex.quote(p) for p in cmd)}")
+        r = subprocess.run(cmd)
+        if r.returncode != 0:
+            print(f"odumper fix failed with exit code {r.returncode}")
+            return
+        
+        # Use the .fixed file for subsequent dump
+        args.redo_file = args.redo_file + '.fixed'
+
     if args.local_file:
         temp_name = f"/opt/oracle/oradata/ORCLINTERNAL/archive_logs/{uuid.uuid4().hex}_{os.path.basename(args.redo_file)}"
         with open(args.redo_file, "rb") as f:

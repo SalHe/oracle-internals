@@ -1,3 +1,5 @@
+use std::fmt::{Debug, Display};
+
 use bitfield_struct::bitfield;
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
@@ -171,8 +173,32 @@ impl RPMeta {
                 KdoOp::CFA => RPMetaRest::CFA,
                 KdoOp::CKI => RPMetaRest::CKI,
                 KdoOp::SKL => RPMetaRest::SKL,
-                KdoOp::QMI => RPMetaRest::QMI,
-                KdoOp::QMD => RPMetaRest::QMD,
+                KdoOp::QMI => {
+                    // TODO what about v[0]?
+                    let data: &RPMetaQMI =
+                        FromBytes::ref_from_bytes(&v[1].data[0..v[1].size as usize])?;
+
+                    let mut cols = Vec::new();
+                    let mut offset = 0usize;
+                    while offset < data.col_data.len() {
+                        let size = data.col_data[offset] as usize;
+                        if size == 0xFF {
+                            cols.push(None);
+                        } else {
+                            cols.push(Some(&data.col_data[offset + 1..offset + 1 + size]));
+                            offset += size;
+                        }
+                        offset += 1;
+                    }
+
+                    RPMetaRest::QMI(RPMetaQMIWrapper {
+                        meta: FromBytes::ref_from_bytes(&self.rest)?,
+                        data,
+                        cols,
+                        tl: offset + 3, // meta(3 bytes)
+                    })
+                }
+                KdoOp::QMD => RPMetaRest::QMD(FromBytes::ref_from_bytes(&self.rest)?),
                 KdoOp::ArrayUpdate => {
                     const SINGLE_SIZE: usize = 28; // TODO how to determine size of single entry?
                     let row_count = self.rest[0];
@@ -199,12 +225,12 @@ impl RPMeta {
                     let data_size = data_sizes[wrapper.from_rows.unwrap() as usize] as usize;
                     let data_offset = data_sizes.iter().take(row_id).sum::<u16>() as usize;
 
-                    let meta = RPMeta21Wrapper {
-                        meta: FromBytes::ref_from_bytes(&self.rest)?,
+                    let meta = FromBytes::ref_from_bytes(&self.rest)?;
+                    RPMetaRest::ArrayUpdateContinue(RPMeta21Wrapper {
+                        meta,
                         begin_column,
                         data: &v[2].data[data_offset..(data_offset + data_size)],
-                    };
-                    RPMetaRest::ArrayUpdateContinue(meta)
+                    })
                 }
                 KdoOp::LMN => RPMetaRest::LMN,
                 KdoOp::LLB => RPMetaRest::LLB,
@@ -293,6 +319,22 @@ pub struct RPMetaDRP {
 
 #[derive(KnownLayout, Immutable, FromBytes, Debug)]
 #[repr(C)]
+pub struct RPMetaQMD {
+    pub tabn: i8,
+    pub lock: i8,
+    pub nrow: i8,
+    _unknown_1: u8,
+    slots: [i16],
+}
+
+impl RPMetaQMD {
+    pub fn slots(&self) -> &[i16] {
+        &self.slots[..(self.nrow as usize)]
+    }
+}
+
+#[derive(KnownLayout, Immutable, FromBytes, Debug)]
+#[repr(C)]
 pub struct RPMeta19<'a> {
     pub row_count: u8,
     pub rows: Vec<RPMetaWrapper<'a>>,
@@ -327,6 +369,25 @@ pub struct RPMetaURPWrapper<'a> {
     pub data: Vec<&'a [u8]>,
 }
 
+#[derive(KnownLayout, Immutable, FromBytes, Debug)]
+#[repr(C)]
+pub struct RPMetaQMI {
+    pub fb_flags: IRPFbFlags,
+    pub lb: u8,
+    pub column_count: u8,
+
+    /// size(u8) + data for each column, in order. size is the actual data size, excluding padding.
+    col_data: [u8],
+}
+
+#[derive(Debug)]
+pub struct RPMetaQMIWrapper<'a> {
+    pub meta: &'a RPMetaQMD,
+    pub data: &'a RPMetaQMI,
+    pub cols: Vec<Option<&'a [u8]>>,
+    pub tl: usize,
+}
+
 pub enum RPMetaRest<'a> {
     IUR,
     IRP(RPMetaIRPWrapper<'a>),
@@ -338,8 +399,8 @@ pub enum RPMetaRest<'a> {
     CFA,
     CKI,
     SKL,
-    QMI,
-    QMD,
+    QMI(RPMetaQMIWrapper<'a>),
+    QMD(&'a RPMetaQMD),
     ArrayUpdate(RPMeta19<'a>),
     DSC,
     ArrayUpdateContinue(RPMeta21Wrapper<'a>),
@@ -399,6 +460,23 @@ pub struct IRPFbFlags {
     /// Cluster Key
     #[bits(1)]
     pub k: bool,
+}
+
+impl Display for IRPFbFlags {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}{}{}{}{}{}{}{}",
+            if self.k() { 'K' } else { '-' },
+            if self.c() { 'C' } else { '-' },
+            if self.h() { 'H' } else { '-' },
+            if self.d() { 'D' } else { '-' },
+            if self.f() { 'F' } else { '-' },
+            if self.l() { 'L' } else { '-' },
+            if self.p() { 'P' } else { '-' },
+            if self.n() { 'N' } else { '-' },
+        )
+    }
 }
 
 #[bitfield(u8)]

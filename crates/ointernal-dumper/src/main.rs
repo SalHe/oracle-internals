@@ -1,4 +1,5 @@
 mod dump;
+mod filter;
 mod fix;
 mod utils;
 
@@ -26,6 +27,25 @@ enum Commands {
         /// Dump raw vector content.
         #[arg(short, long, default_value = "false")]
         force_vector: bool,
+
+        /// Filter expression for records and changes.
+        ///
+        /// Available variables (all integers):
+        ///   - record: Record number (1-based)
+        ///   - change: Change number within record (1-based)
+        ///   - layer: Layer of change (5, 11, 13, etc)
+        ///   - op: Operation type within layer
+        ///   - scn: System Change Number (as integer)
+        ///
+        /// Expressions use standard operators: `==`, `!=`, `<`, `>`, `<=`, `>=`,
+        /// logical `&&`, `||`, `!`, and arithmetic as needed.
+        ///
+        /// Examples:
+        ///   "record == 1 || record == 2 || record == 3"
+        ///   "record >= 1 && record <= 10 && layer == 11"
+        ///   "op >= 1 && op <= 5 && layer == 11"
+        #[arg(long)]
+        filter: Option<String>,
     },
 
     /// fix checksum of redo file(to modify redo file and dump it using Oracle Database)
@@ -57,7 +77,7 @@ fn main() -> anyhow::Result<()> {
     let args = Cli::parse();
 
     match args.command {
-        Commands::Dump { redo, force_vector } => read_redo(redo, force_vector),
+        Commands::Dump { redo, force_vector, filter } => read_redo(redo, force_vector, filter),
         Commands::Fix { redo, replaces } => {
             fix_redo(redo, replaces)?;
             Ok(())

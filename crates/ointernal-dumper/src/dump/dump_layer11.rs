@@ -13,6 +13,7 @@ impl Dump for Table<'_> {
         match self {
             Self::UndoRowOperation(Some(irp)) => irp.dump(),
             Self::InsertRowPiece(Some(irp)) => irp.dump(),
+            Self::InsertMultipleRows(Some(irp)) => irp.dump(),
             Self::DeleteRowPiece(Some(irp)) => irp.dump(),
             Self::ArrayUpdate(Some(irp)) => irp.dump(),
             Self::UpdateRowPiece(Some(irp)) => irp.dump(),
@@ -162,17 +163,8 @@ impl Dump for RPMetaWrapper<'_> {
                         m.irp.delta_size,
                     );
                     println!(
-                        "fb: {}{}{}{}{}{}{}{} lb: 0x{:x}  cc: {}",
-                        if m.irp.fb_flags.k() { 'K' } else { '-' },
-                        if m.irp.fb_flags.c() { 'C' } else { '-' },
-                        if m.irp.fb_flags.h() { 'H' } else { '-' },
-                        if m.irp.fb_flags.d() { 'D' } else { '-' },
-                        if m.irp.fb_flags.f() { 'F' } else { '-' },
-                        if m.irp.fb_flags.l() { 'L' } else { '-' },
-                        if m.irp.fb_flags.p() { 'P' } else { '-' },
-                        if m.irp.fb_flags.n() { 'N' } else { '-' },
-                        m.irp.lb,
-                        m.irp.column_count,
+                        "fb: {} lb: 0x{:x}  cc: {}",
+                        m.irp.fb_flags, m.irp.lb, m.irp.column_count,
                     );
 
                     print!("null: ");
@@ -199,9 +191,9 @@ impl Dump for RPMetaWrapper<'_> {
                             "col {:>2}: {} {}",
                             i,
                             if let Some(c) = col {
-                                &format!("[{:>2}] ", c.len())
+                                format!("[{:>2}] ", c.len())
                             } else {
-                                ""
+                                "".to_string()
                             },
                             col.map(hex::encode).unwrap_or("*NULL*".to_string())
                         );
@@ -246,11 +238,38 @@ impl Dump for RPMetaWrapper<'_> {
                 layer11::RPMetaRest::SKL => {
                     print_kdo_op(Some("SKL"));
                 }
-                layer11::RPMetaRest::QMI => {
+                layer11::RPMetaRest::QMI(m) => {
                     print_kdo_op(Some("QMI"));
+                    println!(
+                        "tabn: {} lock: {} nrow: {}",
+                        m.meta.tabn, m.meta.lock, m.meta.nrow
+                    );
+                    for (i, slot) in m.meta.slots().iter().enumerate() {
+                        // cast to i32 to keep same with Oracle.
+                        println!("slot[{}]: {}", i, *slot as i32);
+                    }
+
+                    println!(
+                        "tl: {} fb: {} lb: 0x{:X}  cc: {}",
+                        m.tl, m.data.fb_flags, m.data.lb, m.data.column_count,
+                    );
+
+                    for (i, col) in m.cols.iter().enumerate() {
+                        match col {
+                            Some(c) => {
+                                println!("col {:>2}: [{:>2}]  {}", i, c.len(), Hex::spaced(c))
+                            }
+                            None => println!("col {:>2}: *NULL*", i),
+                        }
+                    }
                 }
-                layer11::RPMetaRest::QMD => {
+                layer11::RPMetaRest::QMD(m) => {
                     print_kdo_op(Some("QMD"));
+                    println!("tabn: {} lock: {} nrow: {}", m.tabn, m.lock, m.nrow);
+                    for (i, slot) in m.slots().iter().enumerate() {
+                        // cast to i32 to keep same with Oracle.
+                        println!("slot[{}]: {}", i, *slot as i32);
+                    }
                 }
                 layer11::RPMetaRest::ArrayUpdate(m) => {
                     print_kdo_op(Some(" 19"));

@@ -44,6 +44,8 @@ def main():
     parser_redo_dump.add_argument('redo_file', help='redo 文件路径')
     parser_redo_dump.add_argument(
         '-l', '--local_file', help='redo 文件来自于宿主机', default=False, action='store_true')
+    parser_redo_dump.add_argument(
+        '-r', '--replaces', nargs='*', help='(可选) 使用 odumper fix 进行替换，格式如 0x400,AABBCCDD', default=None)
     parser_redo_dump.set_defaults(func=redo.dump_redo)
 
     args = parser.parse_args()
