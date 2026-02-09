@@ -22,11 +22,12 @@ macro_rules! codes_for_layer {
     (
         $(
             $(#[$layer_meta:meta])*
-            $layer_name:ident = $layer_code:literal:
+            $layer_name:ident = $layer_code:literal {
                 $(
                     $(#[$op_meta:meta])*
                     $op_name:ident = $op_code:literal $(! $($op_data_type:ident)::*)?,
-                )*;
+                )*
+            }
         )+
     ) => {
         // op code and data enum
@@ -131,18 +132,15 @@ macro_rules! codes_for_layer {
 
 codes_for_layer! {
     /// Transaction Control operations
-    TransactionControl = 1:
-    ;
+    TransactionControl = 1 {}
 
     /// Transaction read operations
-    TransactionRead = 2:
-    ;
+    TransactionRead = 2 {}
 
     /// Transaction update operations
-    TransactionUpdate = 3:
-    ;
+    TransactionUpdate = 3 {}
 
-    BlockCleanOut = 4:
+    BlockCleanOut = 4 {
         /// Block cleanout record
         BlockCleanOutRecord = 1,
         /// Physical cleanout
@@ -155,9 +153,9 @@ codes_for_layer! {
         FormatBlock = 5,
         /// ktbcc redo - Commit Time Block Cleanout Change
         CommitTimeBlockCleanOutChange = 6,
-    ;
+    }
 
-    TransactionUndoManagement = 5:
+    TransactionUndoManagement = 5 {
         /// ktudb redo (undo block redo)
         UndoBlockRedo = 1 !layers::layer5::UndoBlockRedo,
         /// ktudh redo (undo header redo)
@@ -195,13 +193,12 @@ codes_for_layer! {
         FileSpaceHeaderUndo = 24,
         /// ktuuntp - ??
         Kttuubtp = 28,
-    ;
+    }
 
     /// Control file operations
-    ControlFile = 6:
-    ;
+    ControlFile = 6 {}
 
-    Index = 10:
+    Index = 10 {
         /// SQL load index block
         SqlLoadIndexBlock = 1,
         /// Insert Leaf Row
@@ -276,9 +273,9 @@ codes_for_layer! {
         BranchBlockUpdateRange = 39,
         /// index redo (kdxbdu) : branch block DBA update
         BranchBlockDbaUpdate = 40,
-    ;
+    }
 
-    Table = 11:
+    Table = 11 {
         /// undo row operation
         UndoRowOperation = 1 !layers::layer11::KtbRedo,
         /// IRP insert row piece
@@ -331,13 +328,12 @@ codes_for_layer! {
         Kdoair = 25,
         /// "CMP2" Row Store Compress - partial compression ?
         RowStoreCompressPartial = 28,
-    ;
+    }
 
     /// Cluster operations
-    Cluster = 12:
-    ;
+    Cluster = 12 {}
 
-    SegmentManagement = 13:
+    SegmentManagement = 13 {
         /// ktsfm redo: -- allocate space ??
         AllocateSpace = 1,
         /// KTSFRBFMT (block format) redo
@@ -408,9 +404,9 @@ codes_for_layer! {
         LobSegmentHeaderRedo = 55,
         /// KTSL - LOB Segment Header Block (SHB) undo record
         LobSegmentHeaderUndo = 56,
-    ;
+    }
 
-    ExtentManagement = 14:
+    ExtentManagement = 14 {
         /// ktecush redo: clear extent control lock
         ClearExtentControlLock = 1,
         /// ktelk redo - lock extent (map)
@@ -427,17 +423,15 @@ codes_for_layer! {
         UndoForTruncateFlush = 8,
         /// kteuUpdredo redo - Propagate Extent commit timetmep
         PropagateExtentCommitTimestamp = 12,
-    ;
+    }
 
     /// Tablespace operations
-    Tablespace = 15:
-    ;
+    Tablespace = 15 {}
 
     /// Row cache operations
-    RowCache = 16:
-    ;
+    RowCache = 16 {}
 
-    RecoveryManagement = 17:
+    RecoveryManagement = 17 {
         /// End backup mode marker
         EndBackupModeMarker = 1,
         /// Crash Recovery at scn: 0x0000.02429111
@@ -446,16 +440,16 @@ codes_for_layer! {
         StandbyMetadataCacheInvalidation = 28,
         /// RC Invalidation Marker
         RcInvalidationMarker = 51,
-    ;
+    }
 
-    BlockImage = 18:
+    BlockImage = 18 {
         /// Block image
         BlockImage = 1,
         /// Object / Range reuse
         ObjectRangeReuse = 3,
-    ;
+    }
 
-    DirectLoader = 19:
+    DirectLoader = 19 {
         /// Direct Loader block redo entry (for logged direct path writes)
         DirectLoaderBlockRedo = 1,
         /// Direct Loader invalidate block range redo entry (for nologging direct path writes)
@@ -464,19 +458,19 @@ codes_for_layer! {
         DirectBlockRelogging = 3,
         /// Invalidate range relogging - KCBLCRIR
         InvalidateRangeRelogging = 4,
-    ;
+    }
 
-    CompatibilitySegment = 20:
+    CompatibilitySegment = 20 {
         /// Media Recovery Marker - related to LOB load (KDLI)
         MediaRecoveryMarkerLob = 24,
-    ;
+    }
 
-    LobSegment = 21:
+    LobSegment = 21 {
         /// kdlop (Long Feild) redo: \[sic\] (insert basicfile clob)
         LongFieldRedo = 1,
-    ;
+    }
 
-    LocallyManagedTablespace = 22:
+    LocallyManagedTablespace = 22 {
         /// ktfbhredo - File Space Header Redo:
         FileSpaceHeaderRedo = 2,
         /// ktfbhundo - File Space Header Undo:
@@ -485,18 +479,18 @@ codes_for_layer! {
         FileBitmapBlockRedo = 5,
         /// File Property Map Block (FPM)
         FilePropertyMapBlock = 16,
-    ;
+    }
 
-    BlockWrites = 23:
+    BlockWrites = 23 {
         /// MEDIA RECOVERY MARKER (Block written record 12c)
         MediaRecoveryMarker12c = 1,
         /// Block read record (BRR) - written when db_lost_write_protect enabled
         BlockReadRecord = 2,
         /// MEDIA RECOVERY MARKER (Block written record 19c)
         MediaRecoveryMarker19c = 3,
-    ;
+    }
 
-    DdlStatements = 24:
+    DdlStatements = 24 {
         /// MEDIA RECOVERY MARKER - DDL
         MediaRecoveryMarkerDdl = 1,
         /// Direct load block end mark
@@ -507,22 +501,20 @@ codes_for_layer! {
         Unknown1 = 10,
         /// Unknown operation 2
         Unknown2 = 11,
-    ;
+    }
 
     /// Queues operations
-    Queues = 25:
-    ;
+    Queues = 25 {}
 
-    Lob = 26:
+    Lob = 26 {
         /// Invalidate LOB (?) (KDLI)
         InvalidateLob = 4,
         /// Load LOB (KDLI)
         LoadLob = 6,
-    ;
+    }
 
     /// Block Change Tracking operations
-    BlockChangeTracking = 27:
-    ;
+    BlockChangeTracking = 27 {}
 }
 
 #[cfg(test)]

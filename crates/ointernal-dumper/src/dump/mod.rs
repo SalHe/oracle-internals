@@ -48,7 +48,7 @@ fn print_header_info(fh: &FileHeaderBlock, rh: &RedoFileHead, checksum: u16) {
         rh.activation_id, rh.activation_id,
     );
     println!(
-        "	Control Seq={}=0x{:04x}, File size={}=0x{:x}",
+        "	Control Seq={}=0x{:x}, File size={}=0x{:x}",
         rh.control_seq, rh.control_seq, rh.file_size, rh.file_size,
     );
     println!(

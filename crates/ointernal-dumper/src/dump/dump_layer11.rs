@@ -188,10 +188,10 @@ impl Dump for RPMetaWrapper<'_> {
                         .enumerate()
                     {
                         println!(
-                            "col {:>2}: {} {}",
+                            "col {:>2}: {}{}",
                             i,
                             if let Some(c) = col {
-                                format!("[{:>2}] ", c.len())
+                                format!("[{:>2}]  ", c.len())
                             } else {
                                 "".to_string()
                             },
