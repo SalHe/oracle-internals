@@ -283,7 +283,7 @@ codes_for_layer! {
         /// DRP delete row piece
         DeleteRowPiece = 3 !layers::layer11::KtbRedo,
         /// lock row piece
-        LockRowPiece = 4,
+        LockRowPiece = 4 !layers::layer11::KtbRedo,
         /// URP update row piece
         UpdateRowPiece = 5 !layers::layer11::KtbRedo,
         /// overwrite row piece

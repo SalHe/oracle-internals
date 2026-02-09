@@ -11,12 +11,13 @@ use crate::{dump::Dump, utils::Hex};
 impl Dump for Table<'_> {
     fn dump(&self) -> anyhow::Result<bool> {
         match self {
-            Self::UndoRowOperation(Some(irp)) => irp.dump(),
+            Self::UndoRowOperation(Some(uro)) => uro.dump(),
             Self::InsertRowPiece(Some(irp)) => irp.dump(),
-            Self::InsertMultipleRows(Some(irp)) => irp.dump(),
-            Self::DeleteRowPiece(Some(irp)) => irp.dump(),
-            Self::ArrayUpdate(Some(irp)) => irp.dump(),
-            Self::UpdateRowPiece(Some(irp)) => irp.dump(),
+            Self::DeleteRowPiece(Some(drp)) => drp.dump(),
+            Self::LockRowPiece(Some(lrp)) => lrp.dump(),
+            Self::UpdateRowPiece(Some(urp)) => urp.dump(),
+            Self::InsertMultipleRows(Some(imp)) => imp.dump(),
+            Self::ArrayUpdate(Some(update)) => update.dump(),
             _ => Ok(false),
         }
     }
@@ -210,8 +211,14 @@ impl Dump for RPMetaWrapper<'_> {
                         m.slot,
                     );
                 }
-                layer11::RPMetaRest::LKR => {
+                layer11::RPMetaRest::LKR(m) => {
                     print_kdo_op(Some("LKR"));
+                    println!(
+                        "tabn: {} slot: {} to: {}",
+                        m.tabn as i32,
+                        m.slot as i32,
+                        m.to,
+                    );
                 }
                 layer11::RPMetaRest::URP(m) => {
                     print_kdo_op(Some("URP"));

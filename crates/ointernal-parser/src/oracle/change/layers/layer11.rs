@@ -155,7 +155,7 @@ impl RPMeta {
                     v,
                 }),
                 KdoOp::DRP => RPMetaRest::DRP(FromBytes::ref_from_bytes(&self.rest)?),
-                KdoOp::LKR => RPMetaRest::LKR,
+                KdoOp::LKR => RPMetaRest::LKR(FromBytes::ref_from_bytes(&self.rest)?),
                 KdoOp::URP => {
                     // TODO what's `rest` for ?
                     let (m, _rest) = FromBytes::ref_from_prefix(&self.rest)?;
@@ -319,6 +319,21 @@ pub struct RPMetaDRP {
 
 #[derive(KnownLayout, Immutable, FromBytes, Debug)]
 #[repr(C)]
+pub struct RPMetaLKR {
+    pub slot: u16,
+    pub tabn: i8,
+    /// TODO ? what's this? seems like lock mode?
+    /// 
+    /// Guess:
+    /// 
+    /// 0. free (undo of `SELECT FOR UPDATE`)
+    /// 1. ?
+    /// 2. X (redo of `SELECT FOR UPDATE`)
+    pub to: i8,
+}
+
+#[derive(KnownLayout, Immutable, FromBytes, Debug)]
+#[repr(C)]
 pub struct RPMetaQMD {
     pub tabn: i8,
     pub lock: i8,
@@ -392,7 +407,7 @@ pub enum RPMetaRest<'a> {
     IUR,
     IRP(RPMetaIRPWrapper<'a>),
     DRP(&'a RPMetaDRP),
-    LKR,
+    LKR(&'a RPMetaLKR),
     URP(RPMetaURPWrapper<'a>),
     ORP,
     MFC,
