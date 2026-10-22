@@ -472,7 +472,7 @@ codes_for_layer! {
 
     LocallyManagedTablespace = 22 {
         /// ktfbhredo - File Space Header Redo:
-        FileSpaceHeaderRedo = 2,
+        FileSpaceHeaderRedo = 2 !layers::layer22::FileSpaceHeaderRedo,
         /// ktfbhundo - File Space Header Undo:
         FileSpaceHeaderUndo = 3,
         /// ktfbbredo - File BitMap Block Redo:

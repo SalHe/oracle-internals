@@ -4,6 +4,7 @@ mod dump_layer13;
 mod dump_layer14;
 mod dump_layer17;
 mod dump_layer18;
+mod dump_layer22;
 mod dump_layer4;
 mod dump_layer5;
 
@@ -204,6 +205,7 @@ fn print_record(op: &Op<'_>) -> anyhow::Result<bool> {
         Op::ExtentManagement(x) => x.dump(),
         Op::RecoveryManagement(x) => x.dump(),
         Op::BlockImage(x) => x.dump(),
+        Op::LocallyManagedTablespace(x) => x.dump(),
         _ => Ok(false),
     }
 }
