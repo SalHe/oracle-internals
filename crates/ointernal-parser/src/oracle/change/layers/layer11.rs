@@ -177,29 +177,82 @@ impl RPMeta {
                 KdoOp::CKI => RPMetaRest::CKI,
                 KdoOp::SKL => RPMetaRest::SKL,
                 KdoOp::QMI => {
-                    // TODO what about v[0]?
-                    let data: &RPMetaQMI =
-                        FromBytes::ref_from_bytes(&v[1].data[0..v[1].size as usize])?;
+                    let meta: &RPMetaQMD = FromBytes::ref_from_bytes(&self.rest)?;
+                    let nrow = usize::try_from(meta.nrow).map_err(|_| ConvertError::Validity {
+                        reason: format!("QMI row count is negative: {}", meta.nrow),
+                    })?;
 
-                    let mut cols = Vec::new();
-                    let mut offset = 0usize;
-                    while offset < data.col_data.len() {
-                        let size = data.col_data[offset] as usize;
-                        if size == 0xFF {
-                            cols.push(None);
-                        } else {
-                            cols.push(Some(&data.col_data[offset + 1..offset + 1 + size]));
-                            offset += size;
-                        }
-                        offset += 1;
+                    // `v[0]` holds the total length (`tl`) of every row, `v[1]`
+                    // the rows' column data back to back.
+                    let tl: &[u16] = if v.is_empty() {
+                        &[]
+                    } else {
+                        <[u16]>::ref_from_bytes(&v[0].data[..v[0].size as usize])?
+                    };
+                    let rows_data = v
+                        .get(1)
+                        .map(|x| &x.data[..x.size as usize])
+                        .unwrap_or_default();
+                    if tl.len() < nrow {
+                        return Err(ConvertError::Validity {
+                            reason: format!(
+                                "QMI has {} row lengths but the row count is {}",
+                                tl.len(),
+                                nrow,
+                            ),
+                        });
                     }
 
-                    RPMetaRest::QMI(RPMetaQMIWrapper {
-                        meta: FromBytes::ref_from_bytes(&self.rest)?,
-                        data,
-                        cols,
-                        tl: offset + 3, // meta(3 bytes)
-                    })
+                    let mut rows = Vec::with_capacity(nrow);
+                    let mut offset = 0usize;
+                    for (i, &tl) in tl.iter().take(nrow).enumerate() {
+                        let size = tl as usize;
+                        let row = rows_data.get(offset..offset + size).ok_or_else(|| {
+                            ConvertError::Validity {
+                                reason: format!(
+                                    "QMI row {} needs {} bytes at offset {}, but only {} \
+                                     bytes are logged",
+                                    i,
+                                    size,
+                                    offset,
+                                    rows_data.len(),
+                                ),
+                            }
+                        })?;
+                        offset += size;
+
+                        let data: &RPMetaQMI = FromBytes::ref_from_bytes(row)?;
+                        let mut cols = Vec::new();
+                        let mut pos = 0usize;
+                        while pos < data.col_data.len() {
+                            let size = data.col_data[pos] as usize;
+                            if size == 0xFF {
+                                cols.push(None);
+                                pos += 1;
+                            } else if pos + 1 + size <= data.col_data.len() {
+                                cols.push(Some(&data.col_data[pos + 1..pos + 1 + size]));
+                                pos += 1 + size;
+                            } else {
+                                return Err(ConvertError::Validity {
+                                    reason: format!(
+                                        "QMI row {} column data is truncated at offset {}: \
+                                         size {} but only {} bytes follow",
+                                        i,
+                                        pos,
+                                        size,
+                                        data.col_data.len() - pos - 1,
+                                    ),
+                                });
+                            }
+                        }
+                        rows.push(RPMetaQMIEntry {
+                            tl: size,
+                            data,
+                            cols,
+                        });
+                    }
+
+                    RPMetaRest::QMI(RPMetaQMIWrapper { meta, rows })
                 }
                 KdoOp::QMD => RPMetaRest::QMD(FromBytes::ref_from_bytes(&self.rest)?),
                 KdoOp::ArrayUpdate => {
@@ -347,7 +400,9 @@ pub struct RPMetaQMD {
 
 impl RPMetaQMD {
     pub fn slots(&self) -> &[i16] {
-        &self.slots[..(self.nrow as usize)]
+        // `nrow` comes from the file; never slice past the logged slots.
+        let nrow = (self.nrow as usize).min(self.slots.len());
+        &self.slots[..nrow]
     }
 }
 
@@ -401,9 +456,18 @@ pub struct RPMetaQMI {
 #[derive(Debug)]
 pub struct RPMetaQMIWrapper<'a> {
     pub meta: &'a RPMetaQMD,
+    /// One entry per row, in slot order.
+    pub rows: Vec<RPMetaQMIEntry<'a>>,
+}
+
+/// One row of a `QMI` change: its total length, column metadata and column
+/// data.
+#[derive(Debug)]
+pub struct RPMetaQMIEntry<'a> {
+    /// Total row length, Oracle's `tl`.
+    pub tl: usize,
     pub data: &'a RPMetaQMI,
     pub cols: Vec<Option<&'a [u8]>>,
-    pub tl: usize,
 }
 
 pub enum RPMetaRest<'a> {

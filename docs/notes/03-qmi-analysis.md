@@ -90,19 +90,45 @@ col  0: [ 2]  c1 03    ← Column 0, 2-byte value, value=3
    - All vectors extracted correctly
    - Column data matches Oracle's interpretation
 
-### ⏳ Optional Enhancements (Not Required)
+### Multi-row QMI (`nrow > 1`)
 
-Full column-level decoding would require:
-1. Parsing vector[3] header to extract column count
-2. Iterating through variable-length column entries
-3. Decoding NUMBER format bytes (c1 XX = mantissa with exponent)
-4. Formatting output as "col X: [len] XX XX" format
+`nrow` comes from the `RPMetaQMD` header in `vector[1]`. The row layout is:
 
-**Current Status:** Raw vectors are captured and can be inspected with `./odumper dump -f`. Full formatting is not critical since:
-- RPMeta extraction is complete
-- Vector hex is visible and verifiable
-- Oracle comparison confirms correctness
-- Basic operation recognition is achieved
+| Vector | Content |
+|--------|---------|
+| `v[0]` | row operation header |
+| `v[1]` | `RPMeta` + `RPMetaQMD` (`tabn`, `lock`, `nrow`, `slots[nrow]`) |
+| `v[2]` | `nrow` `u16` values: the total length (`tl`) of each row |
+| `v[3]` | the rows' column data, each row exactly `tl[i]` bytes |
+
+Each row is an `RPMetaQMI` (`fb_flags` u8, `lb` u8, `column_count` u8) followed
+by length-prefixed columns (`0xFF` = NULL). Oracle prints `slot[i]` and then
+that row's `tl`/`fb`/`lb`/`cc` and columns, interleaved:
+
+```
+tabn: 0 lock: 1 nrow: 10
+slot[0]: 0
+tl: 36 fb: --H-FL-- lb: 0x0  cc: 9
+col  0: [ 4]  c3 08 51 34
+...
+slot[1]: 1
+tl: 38 fb: --H-FL-- lb: 0x0  cc: 9
+...
+```
+
+Verified on `TestOverwriteStatsHistogram` record #270 (10 rows, `tl` values
+`24 00 26 00 27 00 26 00 27 00 ...` in `v[2]`). The implementation used to
+parse the whole of `v[3]` as a single row, which walked across row boundaries
+and panicked (`range end index 429 out of range for slice of length 379`) at
+the end of the payload. It now slices each row by `tl[i]` and parses its
+columns independently; all 22 QMI blocks in the current archives match Oracle
+line-for-line.
+
+### ✅ Column decoding
+
+Column lengths and values are printed (`col N: [len] bytes`, `*NULL*`), so no
+further work is needed here. The "optional enhancements" listed previously
+were implemented in `dump_layer11.rs`.
 
 ## Usage
 

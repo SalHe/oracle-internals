@@ -191,22 +191,23 @@ impl Dump for RPMetaWrapper<'_> {
                         "tabn: {} lock: {} nrow: {}",
                         m.meta.tabn, m.meta.lock, m.meta.nrow
                     );
-                    for (i, slot) in m.meta.slots().iter().enumerate() {
+                    for (i, (slot, row)) in m.meta.slots().iter().zip(m.rows.iter()).enumerate() {
                         // cast to i32 to keep same with Oracle.
                         println!("slot[{}]: {}", i, *slot as i32);
-                    }
-
-                    println!(
-                        "tl: {} fb: {} lb: 0x{:X}  cc: {}",
-                        m.tl, m.data.fb_flags, m.data.lb, m.data.column_count,
-                    );
-
-                    for (i, col) in m.cols.iter().enumerate() {
-                        match col {
-                            Some(c) => {
-                                println!("col {:>2}: [{:>2}]  {}", i, c.len(), Hex::spaced(c))
+                        println!(
+                            "tl: {} fb: {} lb: 0x{:X}  cc: {}",
+                            row.tl, row.data.fb_flags, row.data.lb, row.data.column_count,
+                        );
+                        for (col_id, col) in row.cols.iter().enumerate() {
+                            match col {
+                                Some(c) => println!(
+                                    "col {:>2}: [{:>2}]  {}",
+                                    col_id,
+                                    c.len(),
+                                    Hex::spaced(c)
+                                ),
+                                None => println!("col {:>2}: *NULL*", col_id),
                             }
-                            None => println!("col {:>2}: *NULL*", i),
                         }
                     }
                 }
