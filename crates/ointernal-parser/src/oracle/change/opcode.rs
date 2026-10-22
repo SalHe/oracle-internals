@@ -437,7 +437,7 @@ codes_for_layer! {
         /// Crash Recovery at scn: 0x0000.02429111
         CrashRecoveryAtScn = 3,
         /// STANDBY METADATA CACHE INVALIDATION (after commit on sys table update)
-        StandbyMetadataCacheInvalidation = 28,
+        StandbyMetadataCacheInvalidation = 28 !layers::layer17::StandbyMetadataCacheInvalidation,
         /// RC Invalidation Marker
         RcInvalidationMarker = 51,
     }
