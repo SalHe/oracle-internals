@@ -1,6 +1,7 @@
 mod dump_layer10;
 mod dump_layer11;
 mod dump_layer13;
+mod dump_layer4;
 mod dump_layer5;
 
 use std::path::PathBuf;
@@ -196,6 +197,7 @@ fn print_record(op: &Op<'_>) -> anyhow::Result<bool> {
         Op::TransactionUndoManagement(x) => x.dump(),
         Op::Table(x) => x.dump(),
         Op::Index(x) => x.dump(),
+        Op::BlockCleanOut(x) => x.dump(),
         _ => Ok(false),
     }
 }

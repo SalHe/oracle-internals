@@ -67,24 +67,7 @@ impl Dump for RowOperation {
                         f.xid.usn, f.xid.slot, f.xid.sequence, f.uba,
                     );
                     if let Some(bc) = block_clean {
-                        println!(
-                            "Block cleanout record, scn:  0x{:016x} ver: 0x{:02x} opt: 0x{:02x} bigscn: {} compact: {} spare: 0x{:08x}, entries follow...",
-                            bc.head.scn.full_scn(),
-                            bc.head.flags.version(),
-                            bc.head.opt.into_bits(),
-                            if bc.head.flags.big_scn() { "Y" } else { "N" },
-                            if bc.head.flags.compact() { "Y" } else { "N" },
-                            bc.spare,
-                        );
-                        for e in bc.entries {
-                            println!(
-                                "  itli: {}  flg: (opt={} whr={})  scn:  0x{:016x}",
-                                e.itli,
-                                e.flag.opt(),
-                                e.flag.whr(),
-                                e.scn().full_scn(),
-                            );
-                        }
+                        bc.dump()?;
                     }
                 }
                 layer11::InsertRowPieceOpRest::C(uba) => println!("op: C  uba: {}", uba),

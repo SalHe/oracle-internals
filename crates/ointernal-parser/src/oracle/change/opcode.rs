@@ -142,7 +142,7 @@ codes_for_layer! {
 
     BlockCleanOut = 4 {
         /// Block cleanout record
-        BlockCleanOutRecord = 1,
+        BlockCleanOutRecord = 1 !layers::layer4::BlockCleanOutRecord,
         /// Physical cleanout
         PhysicalCleanOut = 2,
         /// Single array change
