@@ -202,11 +202,11 @@ codes_for_layer! {
         /// SQL load index block
         SqlLoadIndexBlock = 1,
         /// Insert Leaf Row
-        InsertLeafRow = 2,
+        InsertLeafRow = 2 !layers::layer10::KdxRedo,
         /// Purge Leaf Row
         PurgeLeafRow = 3,
         /// Delete Leaf Row
-        DeleteLeafRow = 4,
+        DeleteLeafRow = 4 !layers::layer10::KdxRedo,
         /// Restore Leaf Row during rollback
         RestoreLeafRowDuringRollback = 5,
         /// (kdxlok) Lock block (pre-split)
