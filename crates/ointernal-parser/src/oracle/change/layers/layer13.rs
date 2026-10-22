@@ -220,3 +220,50 @@ impl<'a> FromCV<'a> for FormatLobHashBucketBlock<'a> {
 }
 
 // -----------------------------------------------------------------------------
+
+/// `ktspbfredo - Format Pagetable Datablock` (OP:13.21), first vector, 20 bytes.
+#[derive(KnownLayout, Immutable, FromBytes, Debug)]
+#[repr(C)]
+pub struct FormatPagetableDatablockHead {
+    pub objd: u32,
+    /// Bit 15 is not part of the printed type; it selects whether Oracle prints
+    /// the `cscn` line. The printed value is `typ & 0x7fff`.
+    pub typ: u16,
+    /// Printed sign-extended to 64 bits (e.g. `0xff02` becomes
+    /// `18446744073709551362`).
+    pub itls: i16,
+    pub fmt_flag: u32,
+    /// Parent level-1 bitmap block DBA.
+    pub parent_dba: u32,
+    pub poff: u8,
+    /// `#{AMND}`: non-zero values produced no output change.
+    _unknown: [u8; 3],
+}
+
+/// `ktspbfredo - Format Pagetable Datablock` (OP:13.21), second vector, 16 bytes.
+#[derive(KnownLayout, Immutable, FromBytes, Debug)]
+#[repr(C)]
+pub struct FormatPagetableDatablockTail {
+    /// Creation SCN; the full 64-bit value is printed.
+    pub cscn: Scn,
+    pub inc: u32,
+    /// `#{AMND}`: non-zero values produced no output change.
+    _unknown: u32,
+}
+
+#[derive(Debug)]
+pub struct FormatPagetableDatablock<'a> {
+    pub head: &'a FormatPagetableDatablockHead,
+    pub tail: &'a FormatPagetableDatablockTail,
+}
+
+impl<'a> FromCV<'a> for FormatPagetableDatablock<'a> {
+    fn from_vectors(v: &'a [VectorData]) -> Result<Self, ConvertError> {
+        Ok(Self {
+            head: FromBytes::ref_from_bytes(&v[0].data[..v[0].size as usize])?,
+            tail: FromBytes::ref_from_bytes(&v[1].data[..v[1].size as usize])?,
+        })
+    }
+}
+
+// -----------------------------------------------------------------------------

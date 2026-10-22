@@ -355,7 +355,7 @@ codes_for_layer! {
         /// ktspsfredo - Format Level 2 Bitmap Block
         FormatLevel2BitmapBlock = 19,
         /// ktspbfredo - Format Pagetable Datablock
-        FormatPagetableDatablock = 21,
+        FormatPagetableDatablock = 21 !layers::layer13::FormatPagetableDatablock,
         /// State change on level 1 bitmap block
         StateChangeLevel1Bitmap = 22,
         /// Undo on level 1 bitmap block

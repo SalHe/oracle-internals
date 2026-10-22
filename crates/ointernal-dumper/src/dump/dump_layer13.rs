@@ -1,7 +1,8 @@
 use ointernal_parser::oracle::change::{
     SegmentManagement,
     layers::layer13::{
-        self, BlockFormat, BlockLinkModify, FormatLobHashBucketBlock, FreelistModify,
+        self, BlockFormat, BlockLinkModify, FormatLobHashBucketBlock, FormatPagetableDatablock,
+        FreelistModify,
     },
 };
 
@@ -14,6 +15,7 @@ impl Dump for SegmentManagement<'_> {
             Self::BlockLinkModify(Some(b)) => b.dump(),
             Self::FreelistModify(Some(b)) => b.dump(),
             Self::FormatLobHashBucketBlock(Some(b)) => b.dump(),
+            Self::FormatPagetableDatablock(Some(b)) => b.dump(),
             _ => Ok(false),
         }
     }
@@ -137,6 +139,32 @@ impl Dump for FreelistModify<'_> {
                 }
                 None => println!(" Opcode: ???"),
             }
+        }
+        Ok(true)
+    }
+}
+
+impl Dump for FormatPagetableDatablock<'_> {
+    fn dump(&self) -> anyhow::Result<bool> {
+        let h = self.head;
+        // Oracle keeps the trailing space of the banner.
+        println!("ktspbfredo - Format Pagetable Datablock ");
+        println!(
+            "Parent(l1) DBA:  0x{:08x} typ: {} objd: {} itls: {} fmt_flag: {} poff: {}",
+            h.parent_dba,
+            h.typ & 0x7fff,
+            h.objd,
+            h.itls as u64,
+            h.fmt_flag,
+            h.poff,
+        );
+        // Bit 15 of `typ` gates the second line.
+        if h.typ & 0x8000 != 0 {
+            println!(
+                " cscn: 0x{:016x} inc#:{}",
+                self.tail.cscn.full_scn(),
+                self.tail.inc,
+            );
         }
         Ok(true)
     }
