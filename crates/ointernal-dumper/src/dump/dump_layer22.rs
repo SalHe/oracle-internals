@@ -1,6 +1,9 @@
 use ointernal_parser::oracle::change::{
     LocallyManagedTablespace,
-    layers::layer22::{FileSpaceHeaderOp, FileSpaceHeaderRedo, FileSpaceHeaderSave},
+    layers::layer22::{
+        FileBitmapBlockOp, FileBitmapBlockRedo, FileSpaceHeaderOp, FileSpaceHeaderRedo,
+        FileSpaceHeaderSave,
+    },
 };
 
 use crate::dump::Dump;
@@ -9,6 +12,7 @@ impl Dump for LocallyManagedTablespace<'_> {
     fn dump(&self) -> anyhow::Result<bool> {
         match self {
             Self::FileSpaceHeaderRedo(Some(x)) => x.dump(),
+            Self::FileBitmapBlockRedo(Some(x)) => x.dump(),
             _ => Ok(false),
         }
     }
@@ -76,4 +80,34 @@ fn dump_begin(x: &FileSpaceHeaderRedo) {
         x.length(),
         x.instance()
     );
+}
+
+impl Dump for FileBitmapBlockRedo<'_> {
+    fn dump(&self) -> anyhow::Result<bool> {
+        println!("ktfbbredo - File BitMap Block Redo:");
+        match self.op() {
+            FileBitmapBlockOp::FreeBits => {
+                println!("Free Bits: ");
+                println!("Begin: {}, Length: {} ", self.begin(), self.length());
+            }
+            FileBitmapBlockOp::UseBits => {
+                println!("Use Bits: ");
+                println!(
+                    "Begin: {}, Length: {}, Instance: {} ",
+                    self.begin(),
+                    self.length(),
+                    self.instance()
+                );
+            }
+            FileBitmapBlockOp::CopyBits => {
+                println!("Copy Bits: ");
+                // Oracle's `Begin Byte`/`No Bytes` line and the byte dump that
+                // follows come from a longer payload that none of the samples
+                // carry, so they are not reproduced.
+                println!("New First: {}, New Free: {} ", self.begin(), self.length());
+            }
+            FileBitmapBlockOp::Unknown(_) => println!("Unknown OPcode: "),
+        }
+        Ok(true)
+    }
 }

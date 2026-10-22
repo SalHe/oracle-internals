@@ -476,7 +476,7 @@ codes_for_layer! {
         /// ktfbhundo - File Space Header Undo:
         FileSpaceHeaderUndo = 3,
         /// ktfbbredo - File BitMap Block Redo:
-        FileBitmapBlockRedo = 5,
+        FileBitmapBlockRedo = 5 !layers::layer22::FileBitmapBlockRedo,
         /// File Property Map Block (FPM)
         FilePropertyMapBlock = 16,
     }

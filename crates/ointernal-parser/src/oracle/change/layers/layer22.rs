@@ -148,3 +148,101 @@ impl<'a> FromCV<'a> for FileSpaceHeaderRedo<'a> {
         Ok(Self { data: &v[0].data })
     }
 }
+
+// -----------------------------------------------------------------------------
+
+/// Operation of `ktfbbredo` (OP:22.5), first payload byte.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FileBitmapBlockOp {
+    /// 1: printed as `Free Bits: `.
+    FreeBits,
+    /// 2: printed as `Use Bits: `.
+    UseBits,
+    /// 3: printed as `Copy Bits: `.
+    CopyBits,
+    /// Anything else, including 0: printed as `Unknown OPcode: `.
+    Unknown(u8),
+}
+
+impl FileBitmapBlockOp {
+    fn from_raw(raw: u8) -> Self {
+        match raw {
+            1 => Self::FreeBits,
+            2 => Self::UseBits,
+            3 => Self::CopyBits,
+            other => Self::Unknown(other),
+        }
+    }
+}
+
+/// The 12-byte layout of a `ktfbbredo` payload.
+///
+/// Same shape as [`FileSpaceHeaderRedoHead`]: the second byte has no effect on
+/// the output. `Copy Bits` carries more data after `length`.
+#[derive(KnownLayout, Immutable, FromBytes, Debug)]
+#[repr(C)]
+pub struct FileBitmapBlockRedoHead {
+    /// [`FileBitmapBlockOp`] as a raw byte.
+    pub op: u8,
+    /// No effect on the output.
+    pub save: u8,
+    pub instance: u16,
+    pub begin: u32,
+    pub length: u32,
+}
+
+/// `ktfbbredo - File BitMap Block Redo:` (OP:22.5).
+#[derive(Debug)]
+pub struct FileBitmapBlockRedo<'a> {
+    data: &'a [u8],
+}
+
+impl FileBitmapBlockRedo<'_> {
+    const LEN: usize = size_of::<FileBitmapBlockRedoHead>();
+
+    pub fn op(&self) -> FileBitmapBlockOp {
+        FileBitmapBlockOp::from_raw(self.data[0])
+    }
+
+    pub fn instance(&self) -> u16 {
+        self.word16(2)
+    }
+
+    pub fn begin(&self) -> u32 {
+        self.word32(4)
+    }
+
+    pub fn length(&self) -> u32 {
+        self.word32(8)
+    }
+
+    fn word16(&self, offset: usize) -> u16 {
+        self.data
+            .get(offset..offset + 2)
+            .map(|b| u16::from_le_bytes([b[0], b[1]]))
+            .unwrap_or(0)
+    }
+
+    fn word32(&self, offset: usize) -> u32 {
+        self.data
+            .get(offset..offset + 4)
+            .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+            .unwrap_or(0)
+    }
+}
+
+impl<'a> FromCV<'a> for FileBitmapBlockRedo<'a> {
+    fn from_vectors(v: &'a [VectorData]) -> Result<Self, ConvertError> {
+        if v[0].size < Self::LEN as u64 {
+            return Err(ConvertError::Validity {
+                reason: format!(
+                    "ktfbbredo payload is too short for a save area: {} bytes",
+                    v[0].size
+                ),
+            });
+        }
+        Ok(Self {
+            data: &v[0].data[..Self::LEN],
+        })
+    }
+}
