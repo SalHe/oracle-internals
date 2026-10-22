@@ -47,7 +47,13 @@ impl<'a> FromCV<'a> for UndoHeaderRedo<'a> {
         Ok(Self {
             data,
             pdbuid: if data.flag.pdb_uid() {
-                Some(FromBytes::ref_from_bytes(&v[1].data)?)
+                // The pdb uid is the *trailing* 4-byte vector. An optional
+                // extent-map redo (36 bytes, e.g. `kteop`) may precede it,
+                // so `vector#1` is not always the pdb uid.
+                let v = v.last().ok_or(ConvertError::Validity {
+                    reason: "ktudh redo misses the pdb uid vector".to_string(),
+                })?;
+                Some(FromBytes::ref_from_bytes(&v.data[..v.size as usize])?)
             } else {
                 None
             },

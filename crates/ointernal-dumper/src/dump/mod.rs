@@ -1,6 +1,8 @@
 mod dump_layer10;
 mod dump_layer11;
 mod dump_layer13;
+mod dump_layer14;
+mod dump_layer18;
 mod dump_layer4;
 mod dump_layer5;
 
@@ -198,6 +200,8 @@ fn print_record(op: &Op<'_>) -> anyhow::Result<bool> {
         Op::Table(x) => x.dump(),
         Op::Index(x) => x.dump(),
         Op::BlockCleanOut(x) => x.dump(),
+        Op::ExtentManagement(x) => x.dump(),
+        Op::BlockImage(x) => x.dump(),
         _ => Ok(false),
     }
 }

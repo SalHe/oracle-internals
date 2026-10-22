@@ -410,7 +410,7 @@ codes_for_layer! {
         /// ktecush redo: clear extent control lock
         ClearExtentControlLock = 1,
         /// ktelk redo - lock extent (map)
-        LockExtent = 2,
+        LockExtent = 2 !layers::layer14::LockExtent,
         /// Extent de-allocate
         ExtentDeallocate = 3,
         /// kteop redo - redo operation on extent map
@@ -446,7 +446,7 @@ codes_for_layer! {
         /// Block image
         BlockImage = 1,
         /// Object / Range reuse
-        ObjectRangeReuse = 3,
+        ObjectRangeReuse = 3 !layers::layer18::ReuseRedoEntry,
     }
 
     DirectLoader = 19 {
