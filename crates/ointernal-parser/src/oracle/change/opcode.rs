@@ -287,7 +287,7 @@ codes_for_layer! {
         /// URP update row piece
         UpdateRowPiece = 5 !layers::layer11::KtbRedo,
         /// overwrite row piece
-        OverwriteRowPiece = 6,
+        OverwriteRowPiece = 6 !layers::layer11::KtbRedo,
         /// manipulate first column
         ManipulateFirstColumn = 7,
         /// change forwarding address - migration

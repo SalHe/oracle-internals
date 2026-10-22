@@ -168,7 +168,10 @@ impl RPMeta {
                             .collect::<Vec<_>>(),
                     })
                 }
-                KdoOp::ORP => RPMetaRest::ORP,
+                KdoOp::ORP => RPMetaRest::ORP(RPMetaIRPWrapper {
+                    irp: FromBytes::ref_from_bytes(&self.rest)?,
+                    v,
+                }),
                 KdoOp::MFC => RPMetaRest::MFC,
                 KdoOp::CFA => RPMetaRest::CFA,
                 KdoOp::CKI => RPMetaRest::CKI,
@@ -323,9 +326,9 @@ pub struct RPMetaLKR {
     pub slot: u16,
     pub tabn: i8,
     /// TODO ? what's this? seems like lock mode?
-    /// 
+    ///
     /// Guess:
-    /// 
+    ///
     /// 0. free (undo of `SELECT FOR UPDATE`)
     /// 1. ?
     /// 2. X (redo of `SELECT FOR UPDATE`)
@@ -409,7 +412,7 @@ pub enum RPMetaRest<'a> {
     DRP(&'a RPMetaDRP),
     LKR(&'a RPMetaLKR),
     URP(RPMetaURPWrapper<'a>),
-    ORP,
+    ORP(RPMetaIRPWrapper<'a>),
     MFC,
     CFA,
     CKI,

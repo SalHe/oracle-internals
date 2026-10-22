@@ -3,7 +3,7 @@ use colored::Colorize;
 use num_traits::FromPrimitive;
 use ointernal_parser::oracle::change::{
     Table,
-    layers::layer11::{self, KtbRedo, RPMetaUpdate, RPMetaWrapper, RowOperation},
+    layers::layer11::{self, KtbRedo, RPMetaIRPWrapper, RPMetaUpdate, RPMetaWrapper, RowOperation},
 };
 
 use crate::{dump::Dump, utils::Hex};
@@ -16,6 +16,7 @@ impl Dump for Table<'_> {
             Self::DeleteRowPiece(Some(drp)) => drp.dump(),
             Self::LockRowPiece(Some(lrp)) => lrp.dump(),
             Self::UpdateRowPiece(Some(urp)) => urp.dump(),
+            Self::OverwriteRowPiece(Some(orp)) => orp.dump(),
             Self::InsertMultipleRows(Some(imp)) => imp.dump(),
             Self::ArrayUpdate(Some(update)) => update.dump(),
             _ => Ok(false),
@@ -155,52 +156,7 @@ impl Dump for RPMetaWrapper<'_> {
                 }
                 layer11::RPMetaRest::IRP(m) => {
                     print_kdo_op(Some("IRP"));
-
-                    println!(
-                        "tabn: {} slot: {}(0x{:x}) size/delt: {}",
-                        m.irp.tabn as i32, // seems dumped as i32 in Oracle
-                        m.irp.slot,
-                        m.irp.slot,
-                        m.irp.delta_size,
-                    );
-                    println!(
-                        "fb: {} lb: 0x{:x}  cc: {}",
-                        m.irp.fb_flags, m.irp.lb, m.irp.column_count,
-                    );
-
-                    print!("null: ");
-                    for c in 0..m.irp.column_count {
-                        let n = match m.irp.is_col_null(c) {
-                            Some(is_null) => {
-                                if is_null {
-                                    "N"
-                                } else {
-                                    "-"
-                                }
-                            }
-                            None => "?",
-                        };
-                        print!("{}", n);
-                    }
-                    println!();
-
-                    for (i, col) in (0..m.irp.column_count)
-                        .map(|i| m.col_data(i as _).expect("Column must exist"))
-                        .enumerate()
-                    {
-                        println!(
-                            "col {:>2}: {}{}",
-                            i,
-                            if let Some(c) = col {
-                                format!("[{:>2}]  ", c.len())
-                            } else {
-                                "".to_string()
-                            },
-                            col.map(|x| Hex::spaced(x).auto_break_line())
-                                .map(|x| format!("{}", x))
-                                .unwrap_or("*NULL*".to_string())
-                        );
-                    }
+                    dump_row_piece(&m)?;
                 }
                 layer11::RPMetaRest::DRP(m) => {
                     print_kdo_op(Some("DRP"));
@@ -215,9 +171,7 @@ impl Dump for RPMetaWrapper<'_> {
                     print_kdo_op(Some("LKR"));
                     println!(
                         "tabn: {} slot: {} to: {}",
-                        m.tabn as i32,
-                        m.slot as i32,
-                        m.to,
+                        m.tabn as i32, m.slot as i32, m.to,
                     );
                 }
                 layer11::RPMetaRest::URP(m) => {
@@ -232,8 +186,9 @@ impl Dump for RPMetaWrapper<'_> {
                         );
                     }
                 }
-                layer11::RPMetaRest::ORP => {
+                layer11::RPMetaRest::ORP(m) => {
                     print_kdo_op(Some("ORP"));
+                    dump_row_piece(&m)?;
                 }
                 layer11::RPMetaRest::MFC => {
                     print_kdo_op(Some("MFC"));
@@ -357,4 +312,69 @@ impl Dump for KtbRedo<'_> {
         self.meta.dump()?;
         Ok(true)
     }
+}
+
+/// `KDO Op code`'s payload shared by IRP and ORP.
+fn dump_row_piece(m: &RPMetaIRPWrapper<'_>) -> anyhow::Result<()> {
+    let irp = m.irp;
+
+    println!(
+        "tabn: {} slot: {}(0x{:x}) size/delt: {}",
+        irp.tabn as i32, // seems dumped as i32 in Oracle
+        irp.slot,
+        irp.slot,
+        irp.delta_size,
+    );
+
+    print!(
+        "fb: {} lb: 0x{:x}  cc: {}",
+        irp.fb_flags, irp.lb, irp.column_count,
+    );
+    if irp.fb_flags.c() {
+        print!(" cki: {}", irp.cki);
+    }
+    println!();
+
+    if irp.nrid_dba.into_bits() != 0 || irp.nrid_slot != 0 {
+        println!("nrid:  {}.{:x}", irp.nrid_dba, irp.nrid_slot);
+    }
+
+    if irp.column_count == 0 {
+        // Oracle keeps the trailing space and prints no ruler/mask line.
+        println!("null: ");
+    } else {
+        println!("null:");
+        println!(
+            "01234567890123456789012345678901234567890123456789012345678901234567890123456789"
+        );
+        for c in 0..irp.column_count {
+            print!(
+                "{}",
+                if irp.is_col_null(c).unwrap_or(false) {
+                    "N"
+                } else {
+                    "-"
+                }
+            );
+        }
+        println!();
+    }
+
+    for i in 0..irp.column_count {
+        let col = m.col_data(i as _).expect("Column must exist");
+        println!(
+            "col {:>2}: {}{}",
+            i,
+            if let Some(c) = col {
+                format!("[{:>2}]  ", c.len())
+            } else {
+                "".to_string()
+            },
+            col.map(|x| Hex::spaced(x).auto_break_line())
+                .map(|x| format!("{}", x))
+                .unwrap_or("*NULL*".to_string())
+        );
+    }
+
+    Ok(())
 }
