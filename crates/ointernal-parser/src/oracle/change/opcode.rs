@@ -414,7 +414,7 @@ codes_for_layer! {
         /// Extent de-allocate
         ExtentDeallocate = 3,
         /// kteop redo - redo operation on extent map
-        ExtentMapRedo = 4,
+        ExtentMapRedo = 4 !layers::layer14::ExtentMapRedo,
         /// kteopu undo - undo operation on extent map
         ExtentMapUndo = 5,
         /// kteopf redo - format an extent map block

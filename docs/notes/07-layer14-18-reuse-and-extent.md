@@ -114,4 +114,5 @@ done
 ```
 
 Every 14.1/14.2/18.3 section in the current archives matches the Oracle dump
-line-for-line. The remaining `kteop` (14.4) payload is still unparsed.
+line-for-line. The `kteop` (14.4) payload is decoded in
+`docs/notes/08-extent-map-redo.md`.
