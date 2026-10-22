@@ -182,3 +182,41 @@ impl<'a> FromCV<'a> for FreelistModify<'a> {
 }
 
 // -----------------------------------------------------------------------------
+
+/// `KTSL - Format LOB Hash Bucket Block` (OP:13.43), 48 bytes.
+///
+/// `flag` bits 0 and 1 select the bucket kind: bit 0 set means committed free
+/// space (CFS), otherwise bit 1 set means uncommitted free space (UFS), and any
+/// other value is `(Invalid)`. For CFS, `range` selects the size class printed
+/// after the flag (it is ignored for the other kinds).
+#[derive(KnownLayout, Immutable, FromBytes, Debug)]
+#[repr(C)]
+pub struct FormatLobHashBucketBlockHead {
+    /// Size class: 0 = 2k-32k, 1 = 32k-64k, ... 6 = 1m-64m, else invalid.
+    pub range: u32,
+    pub inst: u32,
+    /// `#{AMND}`: non-zero values produced no output change.
+    _unknown_1: [u32; 3],
+    /// Bit 0: CFS when set. Otherwise bit 1: UFS when set. Neither: invalid.
+    pub flag: u32,
+    /// `#{AMND}`: non-zero values produced no output change.
+    _unknown_2: [u32; 4],
+    pub objd: u32,
+    /// `#{AMND}`: 0 in every observed record.
+    pub inc: u32,
+}
+
+#[derive(Debug)]
+pub struct FormatLobHashBucketBlock<'a> {
+    pub head: &'a FormatLobHashBucketBlockHead,
+}
+
+impl<'a> FromCV<'a> for FormatLobHashBucketBlock<'a> {
+    fn from_vectors(v: &'a [VectorData]) -> Result<Self, ConvertError> {
+        Ok(Self {
+            head: FromBytes::ref_from_bytes(&v[0].data[..v[0].size as usize])?,
+        })
+    }
+}
+
+// -----------------------------------------------------------------------------

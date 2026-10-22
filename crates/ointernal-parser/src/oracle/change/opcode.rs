@@ -383,7 +383,7 @@ codes_for_layer! {
         /// KTSL - Format LOB Persisten Undo Block (PUB)
         FormatLobPersistentUndoBlock = 42,
         /// KTSL - Format LOB Hash Bucket Block (UFS) -- uncommitted free space
-        FormatLobHashBucketBlock = 43,
+        FormatLobHashBucketBlock = 43 !layers::layer13::FormatLobHashBucketBlock,
         /// KTSL - Format LOB Free Space Block (FSB) -- also CFS, committed free space
         FormatLobFreeSpaceBlock = 44,
         /// KTSL - Format LOB Segment Header Block (SHB)

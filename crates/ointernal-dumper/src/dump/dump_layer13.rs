@@ -1,6 +1,8 @@
 use ointernal_parser::oracle::change::{
     SegmentManagement,
-    layers::layer13::{self, BlockFormat, BlockLinkModify, FreelistModify},
+    layers::layer13::{
+        self, BlockFormat, BlockLinkModify, FormatLobHashBucketBlock, FreelistModify,
+    },
 };
 
 use crate::dump::Dump;
@@ -11,6 +13,7 @@ impl Dump for SegmentManagement<'_> {
             Self::BlockFormatRedo(Some(b)) => b.dump(),
             Self::BlockLinkModify(Some(b)) => b.dump(),
             Self::FreelistModify(Some(b)) => b.dump(),
+            Self::FormatLobHashBucketBlock(Some(b)) => b.dump(),
             _ => Ok(false),
         }
     }
@@ -44,6 +47,48 @@ impl Dump for BlockLinkModify<'_> {
             }
         );
         println!("Next dba: {} itli: {}", self.data.dba, self.data.itli);
+        Ok(true)
+    }
+}
+
+impl Dump for FormatLobHashBucketBlock<'_> {
+    fn dump(&self) -> anyhow::Result<bool> {
+        let h = self.head;
+        // Bits 0 and 1 select the bucket kind; any other combination is invalid.
+        let kind = if h.flag & 1 != 0 {
+            "CFS"
+        } else if h.flag & 2 != 0 {
+            "UFS"
+        } else {
+            "Invalid"
+        };
+        println!("KTSL - Format LOB Hash Bucket Block ({})", kind);
+        if kind == "CFS" {
+            println!(
+                "objd: {} inc: {} inst:{} flag: 0x{:x} range: {}",
+                h.objd,
+                h.inc,
+                h.inst,
+                h.flag,
+                match h.range {
+                    0 => "2k-32k",
+                    1 => "32k-64k",
+                    2 => "64k-128k",
+                    3 => "128k-256k",
+                    4 => "256k-512k",
+                    5 => "512k-1m",
+                    6 => "1m-64m",
+                    _ => "Invalid",
+                }
+            );
+        } else {
+            // Oracle ends this line with two spaces (the CFS-only range field is
+            // skipped but its separator remains).
+            println!(
+                "objd: {} inc: {} inst:{} flag: 0x{:x}  ",
+                h.objd, h.inc, h.inst, h.flag
+            );
+        }
         Ok(true)
     }
 }
