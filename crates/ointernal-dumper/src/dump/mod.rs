@@ -354,7 +354,11 @@ pub fn read_redo(
 
             // print record head if not printed
             if !record_printed {
-                println!();
+                // Oracle starts every record with a line holding a single
+                // space. A change dump that leaves its last line open (e.g.
+                // OP:13.28) makes this the line terminator, adding one more
+                // space before the newline.
+                println!(" ");
                 match record {
                     Record::V1(v1) => print_record_head(i_record, &rba, &v1.common, begin_time),
                     Record::V2(v2) => {

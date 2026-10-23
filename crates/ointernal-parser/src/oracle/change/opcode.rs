@@ -369,7 +369,7 @@ codes_for_layer! {
         /// Undo on level 3 bitmap block
         UndoLevel3Bitmap = 27,
         /// Update LHWM and HHWM on segment header
-        UpdateLhwmHhwm = 28,
+        UpdateLhwmHhwm = 28 !layers::layer13::UpdateLhwmHhwm,
         /// Undo on segment header
         UndoSegmentHeader = 29,
         /// Segment shrink redo for L1 bitmap block

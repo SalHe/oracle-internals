@@ -267,3 +267,121 @@ impl<'a> FromCV<'a> for FormatPagetableDatablock<'a> {
 }
 
 // -----------------------------------------------------------------------------
+
+/// Sub-operation of `UpdateLhwmHhwm` (OP:13.28), first dword of the vector.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UpdateLhwmHhwmOp {
+    /// 1: `Lasts in Header`
+    LastsInHeader,
+    /// 2: `High HWM`
+    HighHwm,
+    /// 3: `Low HWM`
+    LowHwm,
+    /// 4: `Both the HWMs`
+    BothHwm,
+    /// 6: `hint dba:`
+    HintDba,
+    /// 9: `Update Express Allocation Area`
+    ExpressAllocationArea,
+    /// 0, 5, 7, 8 and anything else: Oracle prints nothing at all.
+    Unknown(u32),
+}
+
+impl UpdateLhwmHhwmOp {
+    fn from_raw(raw: u32) -> Self {
+        match raw {
+            1 => Self::LastsInHeader,
+            2 => Self::HighHwm,
+            3 => Self::LowHwm,
+            4 => Self::BothHwm,
+            6 => Self::HintDba,
+            9 => Self::ExpressAllocationArea,
+            other => Self::Unknown(other),
+        }
+    }
+}
+
+/// One high-water-mark descriptor (32 bytes).
+///
+/// The field order is the recorded one and differs from the printed order.
+/// `OP:13.22` carries the same descriptor after a 4-byte header.
+#[derive(KnownLayout, Immutable, FromBytes, Debug)]
+#[repr(C)]
+pub struct Hwm {
+    /// `ext#`
+    pub ext: u32,
+    /// `blk#`
+    pub blk: u32,
+    /// `ext size`
+    pub ext_size: u32,
+    /// `Highwater` DBA
+    pub dba: u32,
+    /// `mapblk`
+    pub mapblk: u32,
+    /// `offset`
+    pub offset: u32,
+    /// `#blocks in seg. hdr's freelists`
+    pub freelists: u32,
+    /// `#blocks below`
+    pub below: u32,
+}
+
+/// The 80-byte payload of `OP:13.28`.
+#[derive(KnownLayout, Immutable, FromBytes, Debug)]
+#[repr(C)]
+pub struct UpdateLhwmHhwmData {
+    /// [`UpdateLhwmHhwmOp`] as a raw dword.
+    pub op: u32,
+    /// Descriptor printed by the `High HWM` section.
+    pub high: Hwm,
+    /// Descriptor printed by the `Low HWM` section.
+    pub low: Hwm,
+    /// `lfdba:` of the `Low HWM` section.
+    pub low_lfdba: u32,
+    /// `lfdba:` of the `High HWM` section.
+    pub high_lfdba: u32,
+    /// `#{AMND}`: it equals `high_lfdba + 1` in every sample and patching it
+    /// produced no output change.
+    _unknown: u32,
+}
+
+#[derive(Debug)]
+pub struct UpdateLhwmHhwm<'a> {
+    data: &'a UpdateLhwmHhwmData,
+}
+
+impl UpdateLhwmHhwm<'_> {
+    pub fn data(&self) -> &UpdateLhwmHhwmData {
+        self.data
+    }
+
+    pub fn op(&self) -> UpdateLhwmHhwmOp {
+        UpdateLhwmHhwmOp::from_raw(self.data.op)
+    }
+
+    /// `Allocation Area` state of the `Update Express Allocation Area`
+    /// sub-operation. Oracle only looks at the low byte of the first
+    /// descriptor word: zero prints `EMPTY`, anything else prints `FULL`.
+    pub fn express_allocation_full(&self) -> bool {
+        self.data.high.ext as u8 != 0
+    }
+}
+
+impl<'a> FromCV<'a> for UpdateLhwmHhwm<'a> {
+    fn from_vectors(v: &'a [VectorData]) -> Result<Self, ConvertError> {
+        let len = size_of::<UpdateLhwmHhwmData>();
+        if v[0].size < len as u64 {
+            return Err(ConvertError::Validity {
+                reason: format!(
+                    "ktspfhw redo payload is too short for two HWMs: {} bytes",
+                    v[0].size
+                ),
+            });
+        }
+        Ok(Self {
+            data: FromBytes::ref_from_bytes(&v[0].data[..len])?,
+        })
+    }
+}
+
+// -----------------------------------------------------------------------------
